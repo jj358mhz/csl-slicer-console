@@ -4,43 +4,80 @@
    Design tokens borrow from Uplynk's internal UI language:
    near-black surfaces, off-white text, magenta (#ec1e79) accent.
    Kept in sync with scte-plugin-generator so all Utility Pi tools feel unified.
-*/
+
+   Table of contents
+   -----------------
+   01. Design tokens (custom properties)
+   02. Base elements (reset, body, links, code, scrollbar)
+   03. Site header (topbar)
+   04. Page layout (main, page-header)
+   05. Cards
+   06. Forms & fields
+   07. Buttons & links
+   08. Flash messages
+   09. Data tables
+   10. Badges (generic + state colors)
+   11. Tabs
+   12. Filter bar (audit log)
+   13. Checkbox lists (user↔slicer assignment)
+   14. Account sections
+   15. Slicer grid & cards (dashboard)
+   16. Slicer control actions & results
+   17. Batch selection & floating action bar
+   18. Modal (confirmation dialog)
+   ============================================================================ */
+
+
+/* ==========================================================================
+   01. Design tokens
+   ========================================================================== */
 
 :root {
+  /* Surfaces */
   --bg:            #0a0a0b;
   --surface:       #141416;
   --surface-2:     #1a1a1c;
   --surface-input: #0a0a0b;
 
+  /* Borders */
   --border:        rgba(255, 255, 255, .08);
   --border-strong: rgba(255, 255, 255, .12);
   --border-focus:  rgba(236, 30, 121, .5);
 
+  /* Text */
   --text:          #f0f0f2;
   --text-primary:  #ffffff;
   --text-muted:    #c7c7cb;
   --text-dim:      #9a9a9e;
   --text-faint:    #7a7a80;
 
+  /* Accent (Uplynk magenta) */
   --accent:        #ec1e79;
   --accent-hover:  #f24d97;
   --accent-bg:     rgba(236, 30, 121, .08);
   --accent-grad:   linear-gradient(135deg, #ec1e79, #8b1ecf);
 
+  /* Semantic aliases */
   --primary:       var(--accent);
   --primary-hover: var(--accent-hover);
-
   --error:         #e05252;
   --success:       #22c55e;
   --info:          #38bdf8;
 
+  /* Radii */
   --radius-sm: 4px;
   --radius:    6px;
   --radius-lg: 8px;
 
+  /* Fonts */
   --font-body: Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 }
+
+
+/* ==========================================================================
+   02. Base elements
+   ========================================================================== */
 
 * { box-sizing: border-box; }
 
@@ -56,23 +93,27 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .12); border-radius: 6px; }
-
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); }
 
 code {
   font-family: var(--font-mono);
   font-size: 0.9em;
-  background: rgba(255, 255, 255, .06);
   padding: 1px 6px;
   border-radius: 3px;
+  background: rgba(255, 255, 255, .06);
   color: var(--text-muted);
 }
 
+.mono { font-family: var(--font-mono); font-size: 13px; }
+.muted { color: var(--text-dim); font-size: 13px; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .12); border-radius: 6px; }
+
+
 /* ==========================================================================
-   Site header (topbar)
+   03. Site header
    ========================================================================== */
 
 .site-header {
@@ -99,7 +140,7 @@ code {
   align-items: center;
   gap: 10px;
 }
-/* Little gradient tile in front of the brand text — mirrors .brand-mark from the generator */
+/* Magenta gradient tile before the brand text — mirrors .brand-mark from the generator */
 .site-header__brand::before {
   content: "C";
   width: 26px;
@@ -120,17 +161,18 @@ code {
   font-size: 13px;
   color: var(--text-dim);
 }
-.site-header__user { color: var(--text-dim); font-size: 13px; }
 .site-header__link {
   color: var(--text-dim);
   text-decoration: none;
   font-size: 13px;
 }
 .site-header__link:hover { color: var(--text-primary); }
+.site-header__user { color: var(--text-dim); font-size: 13px; }
 .site-header__logout { display: inline; margin: 0; }
 
+
 /* ==========================================================================
-   Page layout
+   04. Page layout
    ========================================================================== */
 
 .site-main {
@@ -155,8 +197,9 @@ code {
 }
 .page-header__meta { color: var(--text-dim); font-size: 13px; }
 
+
 /* ==========================================================================
-   Cards & sections
+   05. Cards
    ========================================================================== */
 
 .card {
@@ -169,8 +212,9 @@ code {
 .card--narrow { max-width: 400px; margin-left: auto; margin-right: auto; }
 .card h1 { margin-top: 0; font-size: 24px; }
 
+
 /* ==========================================================================
-   Forms & fields
+   06. Forms & fields
    ========================================================================== */
 
 .field { margin-bottom: 1rem; display: flex; flex-direction: column; }
@@ -205,8 +249,9 @@ code {
 
 .form-actions { display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem; }
 
+
 /* ==========================================================================
-   Buttons
+   07. Buttons & links
    ========================================================================== */
 
 .button {
@@ -251,8 +296,9 @@ code {
 
 form.inline { display: inline; margin: 0; }
 
+
 /* ==========================================================================
-   Flash messages
+   08. Flash messages
    ========================================================================== */
 
 .flashes { list-style: none; padding: 0; margin: 0 0 1.5rem; }
@@ -264,14 +310,13 @@ form.inline { display: inline; margin: 0; }
   background: var(--surface);
   font-size: 13px;
 }
-.flash--error { border-left-color: var(--error); }
+.flash--error   { border-left-color: var(--error); }
 .flash--success { border-left-color: var(--success); }
-.flash--info { border-left-color: var(--info); }
+.flash--info    { border-left-color: var(--info); }
 
-.muted { color: var(--text-dim); font-size: 13px; }
 
 /* ==========================================================================
-   Data tables
+   09. Data tables
    ========================================================================== */
 
 .data-table {
@@ -282,7 +327,8 @@ form.inline { display: inline; margin: 0; }
   border-radius: var(--radius);
   overflow: hidden;
 }
-.data-table th, .data-table td {
+.data-table th,
+.data-table td {
   padding: 0.75rem 1rem;
   text-align: left;
   border-bottom: 1px solid var(--border);
@@ -300,10 +346,9 @@ form.inline { display: inline; margin: 0; }
 .data-table td.actions a,
 .data-table td.actions .link-button { margin-left: 0.75rem; }
 
-.mono { font-family: var(--font-mono); font-size: 13px; }
 
 /* ==========================================================================
-   Badges
+   10. Badges
    ========================================================================== */
 
 .badge {
@@ -316,114 +361,60 @@ form.inline { display: inline; margin: 0; }
   color: var(--text-muted);
   border: 1px solid var(--border-strong);
 }
-.badge--admin { background: var(--accent-bg); color: var(--accent); border-color: var(--border-focus); }
+.badge--admin  { background: var(--accent-bg); color: var(--accent); border-color: var(--border-focus); }
 .badge--active { background: rgba(34, 197, 94, 0.12); color: #86efac; border-color: rgba(34, 197, 94, 0.3); }
-.badge--state { background: rgba(255, 255, 255, .06); color: var(--text); }
 
-/* ==========================================================================
-   Slicer grid & cards (dashboard)
-   ========================================================================== */
-
-.slicer-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 12px;
-}
-
-.slicer-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 16px 18px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  transition: border-color 0.15s;
-}
-.slicer-card:hover { border-color: var(--border-strong); }
-
-.slicer-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-}
-.slicer-card__name { font-weight: 700; font-size: 16px; color: var(--text-primary); }
-.slicer-card__meta { color: var(--text-dim); font-size: 12px; margin-top: 3px; }
-
-.slicer-card__actions {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.5rem;
-}
-
-.button--action {
-  padding: 8px 12px;
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 12.5px;
-  font-weight: 600;
-  text-transform: capitalize;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.button--action:hover {
-  background: rgba(255, 255, 255, .04);
-  color: var(--text-primary);
-  border-color: var(--text-faint);
-}
-.button--action--blackout { border-color: rgba(224, 82, 82, 0.4); color: #f39a9a; }
-.button--action--blackout:hover { background: rgba(224, 82, 82, 0.12); border-color: var(--error); color: #fff; }
-.button--action--content_start { border-color: rgba(34, 197, 94, 0.4); color: #86efac; }
-.button--action--content_start:hover { background: rgba(34, 197, 94, 0.12); border-color: var(--success); color: #fff; }
-.button__label { text-transform: capitalize; }
-
-.htmx-indicator { display: none; margin-left: 0.4rem; }
-.htmx-request .htmx-indicator { display: inline; }
-.htmx-request.button--action { opacity: 0.6; pointer-events: none; }
-
-.slicer-card__result:empty { display: none; }
-
-.result {
-  padding: 0.6rem 0.75rem;
-  border-radius: var(--radius);
-  font-size: 12.5px;
-}
-.result--ok { background: rgba(34, 197, 94, 0.08); border-left: 3px solid var(--success); }
-.result--error { background: rgba(224, 82, 82, 0.08); border-left: 3px solid var(--error); }
-.result__title { font-weight: 600; margin-bottom: 0.35rem; text-transform: capitalize; color: var(--text-primary); }
-.result__body {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text-dim);
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-/* ==========================================================================
-   Account sections
-   ========================================================================== */
-
-.account-section { margin-bottom: 32px; }
-.account-section:last-child { margin-bottom: 0; }
-.account-section__title {
-  font-size: 11px;
+/* Slicer state pills (dashboard). Solid fills to read at a glance. */
+.badge--state          { background: rgba(255, 255, 255, .06); color: var(--text); }
+.badge--state--adbreak  {
+  background: rgba(74, 144, 226, 0.85);
+  color: #fff;
+  border-color: #4a90e2;
   font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin: 0 0 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
+}
+.badge--state--slicing  {
+  background: rgba(95, 184, 95, 0.85);
+  color: #fff;
+  border-color: #5fb85f;
+  font-weight: 700;
+}
+.badge--state--blackout {
+  background: rgba(149, 71, 243, 0.85);
+  color: #fff;
+  border-color: #9547F3;
+  font-weight: 700;
 }
 
+
 /* ==========================================================================
-   Filter bar (audit log)
+   11. Tabs
+   ========================================================================== */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+.tab {
+  padding: 10px 16px;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab:hover { color: var(--text-primary); }
+.tab--active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+
+/* ==========================================================================
+   12. Filter bar (audit log)
    ========================================================================== */
 
 .filter-bar {
@@ -438,7 +429,13 @@ form.inline { display: inline; margin: 0; }
   margin-bottom: 1.5rem;
 }
 .filter-field { display: flex; flex-direction: column; gap: 0.25rem; min-width: 180px; }
-.filter-field span { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+.filter-field span {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
 .filter-actions { display: flex; gap: 0.5rem; align-items: center; }
 
 .audit-response {
@@ -450,8 +447,9 @@ form.inline { display: inline; margin: 0; }
   font-size: 12px;
 }
 
+
 /* ==========================================================================
-   Checkbox lists (user↔slicer assignment)
+   13. Checkbox lists (user↔slicer assignment)
    ========================================================================== */
 
 .checkbox-list {
@@ -476,24 +474,227 @@ form.inline { display: inline; margin: 0; }
 .checkbox-row:has(input:checked) { border-color: var(--border-focus); background: var(--accent-bg); }
 .checkbox-row input { accent-color: var(--accent); margin: 0; }
 
-.tabs {
+
+/* ==========================================================================
+   14. Account sections (dashboard groupings)
+   ========================================================================== */
+
+.account-section { margin-bottom: 32px; }
+.account-section:last-child { margin-bottom: 0; }
+
+.account-section__header {
   display: flex;
-  gap: 4px;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 1.5rem;
 }
-.tab {
-  padding: 10px 16px;
+.account-section__title {
+  margin: 0;
+  padding: 0;
+  border: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
   color: var(--text-dim);
-  text-decoration: none;
-  font-size: 13px;
+}
+.section-selectall {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.section-selectall input { accent-color: var(--accent); margin: 0; }
+
+
+/* ==========================================================================
+   15. Slicer grid & cards (dashboard)
+   ========================================================================== */
+
+.slicer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 12px;
+}
+
+.slicer-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: border-color 0.15s;
+}
+.slicer-card:hover { border-color: var(--border-strong); }
+.slicer-card:has(.slicer-checkbox:checked) {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, var(--accent-bg) 0%, var(--surface) 60%);
+}
+
+.slicer-card__header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: flex-start;
+}
+.slicer-card__select { display: flex; align-items: center; padding-top: 2px; }
+.slicer-card__select input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: 0;
+}
+.slicer-card__title { min-width: 0; }
+.slicer-card__name { font-weight: 700; font-size: 16px; color: var(--text-primary); }
+.slicer-card__meta { color: var(--text-dim); font-size: 12px; margin-top: 3px; }
+
+
+/* ==========================================================================
+   16. Slicer control actions & results
+   ========================================================================== */
+
+.slicer-card__actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.button--action {
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12.5px;
   font-weight: 600;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.15s, border-color 0.15s;
+  text-transform: capitalize;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.tab:hover { color: var(--text-primary); }
-.tab--active {
+.button--action:hover {
+  background: rgba(255, 255, 255, .04);
   color: var(--text-primary);
-  border-bottom-color: var(--accent);
+  border-color: var(--text-faint);
 }
+.button--action--blackout {
+  border-color: rgba(224, 82, 82, 0.4);
+  color: #f39a9a;
+}
+.button--action--blackout:hover {
+  background: rgba(224, 82, 82, 0.12);
+  border-color: var(--error);
+  color: #fff;
+}
+.button--action--content_start {
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #86efac;
+}
+.button--action--content_start:hover {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: var(--success);
+  color: #fff;
+}
+.button__label { text-transform: capitalize; }
+
+.htmx-indicator { display: none; margin-left: 0.4rem; }
+.htmx-request .htmx-indicator { display: inline; }
+.htmx-request.button--action { opacity: 0.6; pointer-events: none; }
+
+.slicer-card__result:empty { display: none; }
+
+.result {
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+}
+.result--ok    { background: rgba(34, 197, 94, 0.08); border-left: 3px solid var(--success); }
+.result--error { background: rgba(224, 82, 82, 0.08); border-left: 3px solid var(--error); }
+.result__title {
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  text-transform: capitalize;
+  color: var(--text-primary);
+}
+.result__body {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-dim);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+
+/* ==========================================================================
+   17. Batch selection & floating action bar
+   ========================================================================== */
+
+.batch-bar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+.batch-bar[hidden] { display: none !important; }
+.batch-bar__count {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding-right: 14px;
+  border-right: 1px solid var(--border-strong);
+}
+.batch-bar__actions { display: flex; gap: 8px; }
+
+
+/* ==========================================================================
+   18. Modal (confirmation dialog)
+   ========================================================================== */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal[hidden] { display: none !important; }
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+.modal__panel {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 480px;
+  width: calc(100% - 40px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+.modal__title { margin: 0 0 8px; font-size: 18px; color: var(--text-primary); }
+.modal__body  { margin: 0 0 20px; color: var(--text-muted); font-size: 13.5px; line-height: 1.5; }
+.modal__actions { display: flex; justify-content: flex-end; gap: 10px; }

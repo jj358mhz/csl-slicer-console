@@ -3,69 +3,114 @@
 
 {% block content %}
 <div class="page-header">
-  <h1>Slicers</h1>
-  <div class="page-header__meta">
-    <label class="checkbox-row" style="font-size: 0.85rem;">
-      <input type="checkbox" id="global-dry-run">
-      Dry-run mode
-    </label>
-  </div>
+    <h1>Slicers</h1>
+    <div class="page-header__meta">
+        <label class="checkbox-row" style="font-size: 13px;">
+            <input type="checkbox" id="global-dry-run">
+            Dry-run mode
+        </label>
+    </div>
 </div>
 
 {% if total %}
-  {% for account_label, group in groups %}
-    <section class="account-section">
-      <h2 class="account-section__title">{{ account_label }}</h2>
-      <div class="slicer-grid">
+{% for account_label, group in groups %}
+<section class="account-section">
+    <div class="account-section__header">
+        <h2 class="account-section__title">{{ account_label }}</h2>
+        <label class="section-selectall">
+            <input type="checkbox" class="section-selectall__cb" data-section="{{ account_label }}">
+            <span>Select all</span>
+        </label>
+    </div>
+    <div class="slicer-grid">
         {% for s in group %}
-          <div class="slicer-card" id="slicer-{{ s.id }}">
+        <div class="slicer-card"
+             id="slicer-{{ s.id }}"
+             data-slicer-id="{{ s.id }}"
+             data-section="{{ account_label }}"
+             data-slicer-name="{{ s.slicer_id }}">
             <div class="slicer-card__header">
-              <div>
-                <div class="slicer-card__name">{{ s.slicer_id }}</div>
-                <div class="slicer-card__meta">
-                  {{ s.region or '—' }} · {{ s.protocol or '—' }}
+                <label class="slicer-card__select">
+                    <input type="checkbox" class="slicer-checkbox" value="{{ s.id }}">
+                </label>
+                <div class="slicer-card__title">
+                    <div class="slicer-card__name">{{ s.slicer_id }}</div>
+                    <div class="slicer-card__meta">
+                        {{ s.region or '—' }} · {{ s.protocol or '—' }}
+                    </div>
                 </div>
-              </div>
-              <span class="badge badge--state">{{ s.last_state or 'unknown' }}</span>
+                {% set state_slug = (s.last_state or 'unknown') | lower | replace(' ', '') %}
+                <span class="badge badge--state badge--state--{{ state_slug }}">{{ s.last_state or 'unknown' }}</span>
             </div>
 
             <div class="slicer-card__actions">
-              {% for method in ['status', 'state', 'content_start', 'blackout'] %}
+                {% for method in ['status', 'state', 'content_start', 'blackout'] %}
                 <form hx-post="{{ url_for('slicers.control', slicer_id=s.id) }}"
                       hx-target="#result-{{ s.id }}"
                       hx-swap="innerHTML"
                       hx-indicator="#spinner-{{ s.id }}-{{ method }}"
                       class="inline">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input type="hidden" name="method" value="{{ method }}">
-                  <input type="hidden" name="dry_run" value="0" class="dry-run-flag">
-                  <button type="submit"
-                          class="button button--action button--action--{{ method }}"
-                          data-slicer-id="{{ s.id }}">
-                    <span class="button__label">{{ method.replace('_', ' ') }}</span>
-                    <span id="spinner-{{ s.id }}-{{ method }}" class="htmx-indicator">…</span>
-                  </button>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="method" value="{{ method }}">
+                    <input type="hidden" name="dry_run" value="0" class="dry-run-flag">
+                    <button type="submit"
+                            class="button button--action button--action--{{ method }}"
+                            data-slicer-id="{{ s.id }}">
+                        <span class="button__label">{{ method.replace('_', ' ') }}</span>
+                        <span id="spinner-{{ s.id }}-{{ method }}" class="htmx-indicator">…</span>
+                    </button>
                 </form>
-              {% endfor %}
+                {% endfor %}
             </div>
 
             <div id="result-{{ s.id }}" class="slicer-card__result"></div>
-          </div>
+        </div>
         {% endfor %}
-      </div>
-    </section>
-  {% endfor %}
+    </div>
+</section>
+{% endfor %}
+
+{# Floating action bar — hidden by default #}
+<div id="batch-bar" class="batch-bar" hidden>
+    <div class="batch-bar__count">
+        <span id="batch-count">0</span> slicers selected
+    </div>
+    <div class="batch-bar__actions">
+        <button type="button" class="button button--action" data-batch-method="status">Status</button>
+        <button type="button" class="button button--action" data-batch-method="state">State</button>
+        <button type="button" class="button button--action button--action--content_start"
+                data-batch-method="content_start">Content Start
+        </button>
+        <button type="button" class="button button--action button--action--blackout" data-batch-method="blackout">
+            Blackout
+        </button>
+    </div>
+    <button type="button" id="batch-clear" class="link-button">Clear selection</button>
+</div>
+
+{# Confirmation modal #}
+<div id="confirm-modal" class="modal" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__panel">
+        <h2 class="modal__title" id="confirm-title">Confirm action</h2>
+        <p class="modal__body" id="confirm-body"></p>
+        <div class="modal__actions">
+            <button type="button" class="button button--link" id="confirm-cancel">Cancel</button>
+            <button type="button" class="button button--primary" id="confirm-ok">Confirm</button>
+        </div>
+    </div>
+</div>
 {% else %}
-  <div class="card">
+<div class="card">
     <p class="muted">
-      No slicers assigned to you yet.
-      {% if current_user.is_admin %}
+        No slicers assigned to you yet.
+        {% if current_user.is_admin %}
         Head to <a href="{{ url_for('admin.list_users') }}">Users</a> to assign some.
-      {% else %}
+        {% else %}
         Ask an admin to assign you some slicers.
-      {% endif %}
+        {% endif %}
     </p>
-  </div>
+</div>
 {% endif %}
 {% endblock %}
 
@@ -74,13 +119,175 @@
         integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq"
         crossorigin="anonymous"></script>
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
-    const cb = document.getElementById('global-dry-run');
-    if (!cb) return;
-    cb.addEventListener('change', function () {
-      const v = cb.checked ? '1' : '0';
-      document.querySelectorAll('.dry-run-flag').forEach(el => { el.value = v; });
-    });
-  });
+    (function () {
+        document.addEventListener('DOMContentLoaded', function () {
+            // ---- Dry-run flag ----
+            const dryRunCb = document.getElementById('global-dry-run');
+            if (dryRunCb) {
+                dryRunCb.addEventListener('change', function () {
+                    const v = dryRunCb.checked ? '1' : '0';
+                    document.querySelectorAll('.dry-run-flag').forEach(el => {
+                        el.value = v;
+                    });
+                });
+            }
+
+            // ---- Selection state ----
+            const cards = document.querySelectorAll('.slicer-card');
+            const checkboxes = document.querySelectorAll('.slicer-checkbox');
+            const sectionCbs = document.querySelectorAll('.section-selectall__cb');
+            const batchBar = document.getElementById('batch-bar');
+            const batchCount = document.getElementById('batch-count');
+            const clearBtn = document.getElementById('batch-clear');
+
+            function updateBatchBar() {
+                const selected = document.querySelectorAll('.slicer-checkbox:checked');
+                const n = selected.length;
+                if (n === 0) {
+                    batchBar.hidden = true;
+                } else {
+                    batchBar.hidden = false;
+                    batchCount.textContent = n;
+                }
+                // Sync section "select all" checkboxes to match children
+                sectionCbs.forEach(sc => {
+                    const section = sc.dataset.section;
+                    const inSection = document.querySelectorAll(`.slicer-card[data-section="${section}"] .slicer-checkbox`);
+                    const checked = document.querySelectorAll(`.slicer-card[data-section="${section}"] .slicer-checkbox:checked`);
+                    if (inSection.length === 0) {
+                        sc.checked = false;
+                        sc.indeterminate = false;
+                    } else if (checked.length === inSection.length) {
+                        sc.checked = true;
+                        sc.indeterminate = false;
+                    } else if (checked.length === 0) {
+                        sc.checked = false;
+                        sc.indeterminate = false;
+                    } else {
+                        sc.checked = false;
+                        sc.indeterminate = true;
+                    }
+                });
+            }
+
+            checkboxes.forEach(cb => cb.addEventListener('change', updateBatchBar));
+
+            sectionCbs.forEach(sc => {
+                sc.addEventListener('change', function () {
+                    const section = sc.dataset.section;
+                    document.querySelectorAll(`.slicer-card[data-section="${section}"] .slicer-checkbox`).forEach(cb => {
+                        cb.checked = sc.checked;
+                    });
+                    updateBatchBar();
+                });
+            });
+
+            clearBtn.addEventListener('click', function () {
+                document.querySelectorAll('.slicer-checkbox:checked').forEach(cb => {
+                    cb.checked = false;
+                });
+                updateBatchBar();
+            });
+
+            // ---- Confirmation modal ----
+            const modal = document.getElementById('confirm-modal');
+            const modalTitle = document.getElementById('confirm-title');
+            const modalBody = document.getElementById('confirm-body');
+            const modalOk = document.getElementById('confirm-ok');
+            const modalCancel = document.getElementById('confirm-cancel');
+
+            function askConfirm(title, body) {
+                return new Promise(resolve => {
+                    modalTitle.textContent = title;
+                    modalBody.textContent = body;
+                    modal.hidden = false;
+
+                    function done(v) {
+                        modal.hidden = true;
+                        modalOk.removeEventListener('click', ok);
+                        modalCancel.removeEventListener('click', cancel);
+                        resolve(v);
+                    }
+
+                    function ok() {
+                        done(true);
+                    }
+
+                    function cancel() {
+                        done(false);
+                    }
+
+                    modalOk.addEventListener('click', ok);
+                    modalCancel.addEventListener('click', cancel);
+                });
+            }
+
+            // ---- Batch fire ----
+            const DESTRUCTIVE = new Set(['content_start', 'blackout']);
+
+            async function fireBatch(method) {
+                const selected = Array.from(document.querySelectorAll('.slicer-checkbox:checked'));
+                if (selected.length === 0) return;
+
+                const dryRun = dryRunCb && dryRunCb.checked;
+
+                if (DESTRUCTIVE.has(method) && !dryRun && selected.length > 1) {
+                    const names = selected
+                        .map(cb => cb.closest('.slicer-card').dataset.slicerName)
+                        .slice(0, 5)
+                        .join(', ');
+                    const extra = selected.length > 5 ? `, and ${selected.length - 5} more` : '';
+                    const ok = await askConfirm(
+                        `${method.replace('_', ' ')} on ${selected.length} slicers?`,
+                        `This will fire ${method} against: ${names}${extra}. This is not a dry-run.`
+                    );
+                    if (!ok) return;
+                }
+
+                const csrfInput = document.querySelector('input[name="csrf_token"]');
+                const csrf = csrfInput ? csrfInput.value : '';
+
+                // Fire in parallel
+                const jobs = selected.map(cb => {
+                    const slicerId = cb.value;
+                    const card = cb.closest('.slicer-card');
+                    const resultEl = card.querySelector('.slicer-card__result');
+                    // Optimistic loading state
+                    resultEl.innerHTML = '<div class="result">…running ' + method + '…</div>';
+
+                    const body = new URLSearchParams();
+                    body.set('csrf_token', csrf);
+                    body.set('method', method);
+                    body.set('dry_run', dryRun ? '1' : '0');
+
+                    return fetch(`/slicers/${slicerId}/control`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                        body: body.toString(),
+                        credentials: 'same-origin',
+                    })
+                        .then(r => r.text().then(html => ({ok: r.ok, status: r.status, html})))
+                        .then(res => {
+                            if (res.ok) {
+                                resultEl.innerHTML = res.html;
+                            } else {
+                                resultEl.innerHTML = `<div class="result result--error"><div class="result__title">${method} — HTTP ${res.status}</div></div>`;
+                            }
+                        })
+                        .catch(err => {
+                            resultEl.innerHTML = `<div class="result result--error"><div class="result__title">${method} — Error</div><pre class="result__body">${err.message}</pre></div>`;
+                        });
+                });
+
+                await Promise.all(jobs);
+            }
+
+            document.querySelectorAll('[data-batch-method]').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    fireBatch(btn.dataset.batchMethod);
+                });
+            });
+        });
+    })();
 </script>
 {% endblock %}
