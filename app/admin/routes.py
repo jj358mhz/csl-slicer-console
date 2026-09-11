@@ -334,3 +334,99 @@ def audit_log():
         all_slicers=all_slicers,
         filters={"user_id": user_id, "slicer_id": slicer_id, "method": method},
     )
+
+# ---------------------------------------------------------------------------
+# Manual slicer CRUD (fallback when no scoped API key)
+# ---------------------------------------------------------------------------
+
+@bp.route("/slicers")
+@admin_required
+def list_slicers():
+    slicers = (
+        db.session.query(Slicer)
+        .join(UplynkAccount)
+        .order_by(UplynkAccount.label, Slicer.slicer_id)
+        .all()
+    )
+    return render_template("admin/slicers_list.html", slicers=slicers)
+
+
+@bp.route("/slicers/new", methods=["GET", "POST"])
+@admin_required
+def new_slicer():
+    from app.admin.forms import SlicerForm
+
+    accounts = db.session.query(UplynkAccount).order_by(UplynkAccount.label).all()
+    if not accounts:
+        flash("Add an Uplynk account first before creating slicers.", "error")
+        return redirect(url_for("admin.list_accounts"))
+
+    form = SlicerForm()
+    form.uplynk_account_id.choices = [(a.id, a.label) for a in accounts]
+
+    if form.validate_on_submit():
+        clash = (
+            db.session.query(Slicer)
+            .filter_by(
+                uplynk_account_id=form.uplynk_account_id.data,
+                slicer_id=form.slicer_id.data.strip(),
+            )
+            .first()
+        )
+        if clash:
+            flash("A slicer with that ID already exists under that account.", "error")
+        else:
+            slicer = Slicer(
+                uplynk_account_id=form.uplynk_account_id.data,
+                slicer_id=form.slicer_id.data.strip(),
+                slicer_api_url=form.slicer_api_url.data.strip(),
+                region=form.region.data.strip() or None,
+                protocol=form.protocol.data.strip() or None,
+                is_active=True,
+                is_manual=True,
+            )
+            db.session.add(slicer)
+            db.session.commit()
+            flash(f"Slicer '{slicer.slicer_id}' added.", "success")
+            return redirect(url_for("admin.list_slicers"))
+
+    return render_template("admin/slicer_form.html", form=form, mode="new")
+
+
+@bp.route("/slicers/<int:slicer_id_pk>/edit", methods=["GET", "POST"])
+@admin_required
+def edit_slicer(slicer_id_pk: int):
+    from app.admin.forms import SlicerForm
+
+    slicer = db.session.get(Slicer, slicer_id_pk)
+    if slicer is None:
+        abort(404)
+
+    accounts = db.session.query(UplynkAccount).order_by(UplynkAccount.label).all()
+    form = SlicerForm(obj=slicer)
+    form.uplynk_account_id.choices = [(a.id, a.label) for a in accounts]
+
+    if form.validate_on_submit():
+        slicer.uplynk_account_id = form.uplynk_account_id.data
+        slicer.slicer_id = form.slicer_id.data.strip()
+        slicer.slicer_api_url = form.slicer_api_url.data.strip()
+        slicer.region = form.region.data.strip() or None
+        slicer.protocol = form.protocol.data.strip() or None
+        db.session.commit()
+        flash(f"Slicer '{slicer.slicer_id}' updated.", "success")
+        return redirect(url_for("admin.list_slicers"))
+
+    return render_template("admin/slicer_form.html", form=form, mode="edit", slicer=slicer)
+
+
+@bp.route("/slicers/<int:slicer_id_pk>/delete", methods=["POST"])
+@admin_required
+def delete_slicer(slicer_id_pk: int):
+    slicer = db.session.get(Slicer, slicer_id_pk)
+    if slicer is None:
+        abort(404)
+    name = slicer.slicer_id
+    db.session.delete(slicer)
+    db.session.commit()
+    flash(f"Slicer '{name}' deleted.", "info")
+    return redirect(url_for("admin.list_slicers"))

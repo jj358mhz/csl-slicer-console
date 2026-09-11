@@ -17,6 +17,7 @@
             <a href="{{ url_for('main.history') }}" class="site-header__link">My History</a>
             {% if current_user.is_admin %}
             <a href="{{ url_for('admin.audit_log') }}" class="site-header__link">Audit Log</a>
+            <a href="{{ url_for('admin.list_slicers') }}" class="site-header__link">Slicers</a>
             <a href="{{ url_for('admin.list_users') }}" class="site-header__link">Users</a>
             <a href="{{ url_for('admin.list_accounts') }}" class="site-header__link">Uplynk Accounts</a>
             {% endif %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}
+  {% if mode == 'new' %}Add Slicer{% else %}Edit {{ slicer.slicer_id }}{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card card--narrow">
+  <h1>{% if mode == 'new' %}Add Slicer{% else %}Edit Slicer{% endif %}</h1>
+
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+
+    <div class="field">
+      {{ form.uplynk_account_id.label }}
+      {{ form.uplynk_account_id(class="input") }}
+      {% for err in form.uplynk_account_id.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+    </div>
+
+    <div class="field">
+      {{ form.slicer_id.label }}
+      {{ form.slicer_id(class="input") }}
+      {% if form.slicer_id.description %}<p class="field__help">{{ form.slicer_id.description }}</p>{% endif %}
+      {% for err in form.slicer_id.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+    </div>
+
+    <div class="field">
+      {{ form.slicer_api_url.label }}
+      {{ form.slicer_api_url(class="input") }}
+      {% if form.slicer_api_url.description %}<p class="field__help">{{ form.slicer_api_url.description }}</p>{% endif %}
+      {% for err in form.slicer_api_url.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+    </div>
+
+    <div class="field">
+      {{ form.region.label }}
+      {{ form.region(class="input") }}
+      {% if form.region.description %}<p class="field__help">{{ form.region.description }}</p>{% endif %}
+    </div>
+
+    <div class="field">
+      {{ form.protocol.label }}
+      {{ form.protocol(class="input") }}
+      {% if form.protocol.description %}<p class="field__help">{{ form.protocol.description }}</p>{% endif %}
+    </div>
+
+    <div class="form-actions">
+      {{ form.submit(class="button button--primary") }}
+      <a href="{{ url_for('admin.list_slicers') }}" class="button button--link">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

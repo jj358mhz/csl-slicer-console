@@ -119,6 +119,6 @@ def _apply_sync(
             result.updated += 1
 
     for slicer_id, slicer in existing.items():
-        if slicer_id not in seen_ids and slicer.is_active:
+        if slicer_id not in seen_ids and slicer.is_active and not slicer.is_manual:
             slicer.is_active = False
             result.deactivated += 1

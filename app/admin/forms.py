@@ -7,6 +7,7 @@ from flask_wtf.file import FileAllowed, FileField
 from wtforms import (
     BooleanField,
     PasswordField,
+    SelectField,
     SelectMultipleField,
     StringField,
     SubmitField,
@@ -84,4 +85,34 @@ class UserSlicerAssignmentForm(FlaskForm):
     """Assign slicers to a user via a list of checkboxes."""
 
     slicer_ids = MultiCheckboxField("Slicers", coerce=int)
+    submit = SubmitField("Save")
+
+class SlicerForm(FlaskForm):
+    """Manually add or edit a slicer under an Uplynk account."""
+
+    uplynk_account_id = SelectField(
+        "Uplynk Account",
+        coerce=int,
+        validators=[DataRequired()],
+    )
+    slicer_id = StringField(
+        "Slicer ID",
+        validators=[DataRequired(), Length(max=100)],
+        description="The slicer identifier as used in the CSL URL (e.g. 'slicer30158').",
+    )
+    slicer_api_url = StringField(
+        "Slicer API URL",
+        validators=[DataRequired(), Length(max=500)],
+        description="Full CSL URL, e.g. 'https://ingest-prod-0-us-east-1-3.csl.uplynk.net:443/slicer30158'.",
+    )
+    region = StringField(
+        "Region",
+        validators=[Optional(), Length(max=50)],
+        description="Optional (e.g. 'us-east-1').",
+    )
+    protocol = StringField(
+        "Protocol",
+        validators=[Optional(), Length(max=50)],
+        description="Optional (e.g. 'SRT', 'RTMP').",
+    )
     submit = SubmitField("Save")
