@@ -7,14 +7,15 @@ import os
 
 from flask import Flask
 
+from app.bootstrap import bootstrap_admin
 from app.config import Config
 from app.models import db
 
 
-def create_app(config_class: type[Config] = Config) -> Flask:
+def create_app(config: Config | None = None) -> Flask:
     """Create and configure the Flask application."""
     app = Flask(__name__, instance_relative_config=False)
-    app.config.from_object(config_class)
+    app.config.from_object(config or Config())
 
     _configure_logging(app)
 
@@ -24,6 +25,9 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     # Blueprints
     from app.main import bp as main_bp
     app.register_blueprint(main_bp)
+
+    # First-run bootstrap (idempotent — skips if users already exist)
+    bootstrap_admin(app)
 
     app.logger.info("csl-slicer-console started (env=%s)", app.config.get("ENV", "?"))
     return app
