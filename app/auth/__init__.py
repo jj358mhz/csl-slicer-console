@@ -1,1 +1,5 @@
-"""Auth blueprint (login/logout coming in Step 6)."""
+"""Auth blueprint."""
+
+from app.auth.routes import bp
+
+__all__ = ["bp"]

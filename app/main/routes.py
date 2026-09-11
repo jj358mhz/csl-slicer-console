@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from flask import jsonify
+from flask import jsonify, render_template
+from flask_login import login_required
 
 from app.main import bp
 
 
 @bp.route("/")
+@login_required
 def index() -> str:
-    return (
-        "<h1>csl-slicer-console</h1>"
-        "<p>Under construction. See <code>/health</code>.</p>"
-    )
+    return render_template("main/index.html")
 
 
 @bp.route("/health")

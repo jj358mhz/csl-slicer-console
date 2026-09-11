@@ -6,10 +6,23 @@ import logging
 import os
 
 from flask import Flask
+from flask_login import LoginManager
+from flask_wtf.csrf import CSRFProtect
 
 from app.bootstrap import bootstrap_admin
 from app.config import Config
-from app.models import db
+from app.models import User, db
+
+login_manager = LoginManager()
+csrf = CSRFProtect()
+login_manager.login_view = "auth.login"
+login_manager.login_message = "Please sign in to access that page."
+login_manager.login_message_category = "info"
+
+
+@login_manager.user_loader
+def load_user(user_id: str) -> User | None:
+    return db.session.get(User, int(user_id))
 
 
 def create_app(config: Config | None = None) -> Flask:
@@ -21,10 +34,15 @@ def create_app(config: Config | None = None) -> Flask:
 
     # Extensions
     db.init_app(app)
+    login_manager.init_app(app)
+    csrf.init_app(app)
 
     # Blueprints
+    from app.auth import bp as auth_bp
     from app.main import bp as main_bp
+
     app.register_blueprint(main_bp)
+    app.register_blueprint(auth_bp)
 
     # First-run bootstrap (idempotent — skips if users already exist)
     bootstrap_admin(app)

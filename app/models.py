@@ -40,6 +40,18 @@ class User(Base):
         DateTime(timezone=True), default=utcnow, nullable=False
     )
 
+    # Flask-Login interface
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    @property
+    def is_anonymous(self) -> bool:
+        return False
+
+    def get_id(self) -> str:
+        return str(self.id)
+
     slicers: Mapped[list["Slicer"]] = relationship(
         secondary="user_slicers", back_populates="users"
     )

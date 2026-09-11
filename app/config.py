@@ -39,3 +39,5 @@ class Config:
 
         self.UPLYNK_API_BASE = os.getenv("UPLYNK_API_BASE", "https://services.uplynk.com")
         self.DISCOVERY_SYNC_INTERVAL = int(os.getenv("DISCOVERY_SYNC_INTERVAL", "15"))
+
+        self.WTF_CSRF_ENABLED = os.getenv("WTF_CSRF_ENABLED", "true").lower() == "true"

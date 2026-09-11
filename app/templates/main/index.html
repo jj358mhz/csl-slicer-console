@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — CSL Slicer Console{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Welcome, {{ current_user.email }}</h1>
+  <p>You're signed in{% if current_user.is_admin %} as an <strong>admin</strong>{% endif %}.</p>
+  <p class="muted">Slicer dashboard coming in Step 9.</p>
+</div>
+{% endblock %}

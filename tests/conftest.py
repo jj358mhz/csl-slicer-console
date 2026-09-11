@@ -14,6 +14,7 @@ def app(monkeypatch, tmp_path):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/test.db")
     monkeypatch.setenv("BOOTSTRAP_ADMIN_EMAIL", "test@example.com")
     monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "test-password-123")
+    monkeypatch.setenv("WTF_CSRF_ENABLED", "false")
 
     from app import create_app
     from app.bootstrap import bootstrap_admin

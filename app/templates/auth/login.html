@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Sign in — CSL Slicer Console{% endblock %}
+
+{% block content %}
+<div class="card card--narrow">
+  <h1>Sign in</h1>
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+
+    <div class="field">
+      {{ form.email.label }}
+      {{ form.email(class="input") }}
+      {% for err in form.email.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+    </div>
+
+    <div class="field">
+      {{ form.password.label }}
+      {{ form.password(class="input") }}
+      {% for err in form.password.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+    </div>
+
+    <div class="field field--inline">
+      {{ form.remember() }}
+      {{ form.remember.label }}
+    </div>
+
+    {{ form.submit(class="button button--primary") }}
+  </form>
+</div>
+{% endblock %}
