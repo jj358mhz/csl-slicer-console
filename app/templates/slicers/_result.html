@@ -1,0 +1,17 @@
+{% if outcome.ok %}
+  <div class="result result--ok">
+    <div class="result__title">
+      {{ method_name }}{% if dry_run %} (dry-run){% endif %} — OK
+    </div>
+    {% if outcome.result %}
+      <pre class="result__body">{{ outcome.result.body | tojson(indent=2) if outcome.result.body is mapping else outcome.result.body }}</pre>
+    {% endif %}
+  </div>
+{% else %}
+  <div class="result result--error">
+    <div class="result__title">
+      {{ method_name }} — Error
+    </div>
+    <pre class="result__body">{{ outcome.error or outcome.result.summary }}</pre>
+  </div>
+{% endif %}

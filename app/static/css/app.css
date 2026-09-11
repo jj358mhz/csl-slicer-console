@@ -178,3 +178,92 @@ body {
 form.inline { display: inline; margin: 0; }
 
 .link-button:disabled { color: var(--text-muted); cursor: not-allowed; }
+
+.slicer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1rem;
+}
+
+.slicer-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.slicer-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.slicer-card__name { font-weight: 600; font-size: 1.05rem; }
+.slicer-card__meta { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem; }
+
+.slicer-card__actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.button--action {
+  padding: 0.4rem 0.75rem;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-transform: capitalize;
+  transition: background-color 0.1s;
+}
+.button--action:hover { background: #475569; }
+.button--action--blackout { border-color: rgba(239, 68, 68, 0.4); }
+.button--action--blackout:hover { background: rgba(239, 68, 68, 0.15); }
+.button--action--content_start { border-color: rgba(34, 197, 94, 0.4); }
+.button--action--content_start:hover { background: rgba(34, 197, 94, 0.15); }
+.button__label { text-transform: capitalize; }
+
+.htmx-indicator { display: none; margin-left: 0.4rem; }
+.htmx-request .htmx-indicator { display: inline; }
+.htmx-request.button--action { opacity: 0.6; pointer-events: none; }
+
+.slicer-card__result:empty { display: none; }
+
+.result {
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+.result--ok { background: rgba(34, 197, 94, 0.1); border-left: 3px solid #22c55e; }
+.result--error { background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; }
+.result__title { font-weight: 500; margin-bottom: 0.35rem; text-transform: capitalize; }
+.result__body {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.75rem;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-muted);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.page-header__meta { color: var(--text-muted); }
+
+.account-section { margin-bottom: 2rem; }
+.account-section:last-child { margin-bottom: 0; }
+.account-section__title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}

@@ -3,39 +3,58 @@
 
 {% block content %}
 <div class="page-header">
-  <h1>Your Slicers</h1>
+  <h1>Slicers</h1>
+  <div class="page-header__meta">
+    <label class="checkbox-row" style="font-size: 0.85rem;">
+      <input type="checkbox" id="global-dry-run">
+      Dry-run mode
+    </label>
+  </div>
 </div>
 
-{% if slicers %}
-  <table class="data-table">
-    <thead>
-      <tr>
-        <th>Slicer</th>
-        <th>Account</th>
-        <th>Region</th>
-        <th>State</th>
-        <th>Plugin</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for s in slicers %}
-        <tr>
-          <td><strong>{{ s.slicer_id }}</strong></td>
-          <td>{{ s.uplynk_account.label }}</td>
-          <td>{{ s.region or '—' }}</td>
-          <td>
-            <span class="badge badge--state">{{ s.last_state or 'unknown' }}</span>
-          </td>
-          <td class="mono">
-            {% if s.plugin_id %}{{ s.plugin_id }}{% else %}<span class="muted">—</span>{% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <p class="muted" style="margin-top: 1rem;">
-    Control buttons come in Step 9.
-  </p>
+{% if total %}
+  {% for account_label, group in groups %}
+    <section class="account-section">
+      <h2 class="account-section__title">{{ account_label }}</h2>
+      <div class="slicer-grid">
+        {% for s in group %}
+          <div class="slicer-card" id="slicer-{{ s.id }}">
+            <div class="slicer-card__header">
+              <div>
+                <div class="slicer-card__name">{{ s.slicer_id }}</div>
+                <div class="slicer-card__meta">
+                  {{ s.region or '—' }} · {{ s.protocol or '—' }}
+                </div>
+              </div>
+              <span class="badge badge--state">{{ s.last_state or 'unknown' }}</span>
+            </div>
+
+            <div class="slicer-card__actions">
+              {% for method in ['status', 'state', 'content_start', 'blackout'] %}
+                <form hx-post="{{ url_for('slicers.control', slicer_id=s.id) }}"
+                      hx-target="#result-{{ s.id }}"
+                      hx-swap="innerHTML"
+                      hx-indicator="#spinner-{{ s.id }}-{{ method }}"
+                      class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="method" value="{{ method }}">
+                  <input type="hidden" name="dry_run" value="0" class="dry-run-flag">
+                  <button type="submit"
+                          class="button button--action button--action--{{ method }}"
+                          data-slicer-id="{{ s.id }}">
+                    <span class="button__label">{{ method.replace('_', ' ') }}</span>
+                    <span id="spinner-{{ s.id }}-{{ method }}" class="htmx-indicator">…</span>
+                  </button>
+                </form>
+              {% endfor %}
+            </div>
+
+            <div id="result-{{ s.id }}" class="slicer-card__result"></div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
 {% else %}
   <div class="card">
     <p class="muted">
@@ -48,4 +67,20 @@
     </p>
   </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<script src="https://unpkg.com/htmx.org@2.0.3"
+        integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq"
+        crossorigin="anonymous"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const cb = document.getElementById('global-dry-run');
+    if (!cb) return;
+    cb.addEventListener('change', function () {
+      const v = cb.checked ? '1' : '0';
+      document.querySelectorAll('.dry-run-flag').forEach(el => { el.value = v; });
+    });
+  });
+</script>
 {% endblock %}

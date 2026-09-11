@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from itertools import groupby
+
 from flask import jsonify, render_template
 from flask_login import current_user, login_required
 
@@ -25,7 +27,13 @@ def index() -> str:
             current_user.slicers,
             key=lambda s: (s.uplynk_account.label, s.slicer_id),
         )
-    return render_template("main/index.html", slicers=slicers)
+
+    # Group by account label so the template can render one section per account.
+    groups = [
+        (label, list(items))
+        for label, items in groupby(slicers, key=lambda s: s.uplynk_account.label)
+    ]
+    return render_template("main/index.html", groups=groups, total=len(slicers))
 
 
 @bp.route("/health")

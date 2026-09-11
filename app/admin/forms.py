@@ -24,9 +24,10 @@ class UplynkAccountForm(FlaskForm):
     """
 
     label = StringField(
-        "Label",
+        "Workspace Username",
         validators=[DataRequired(), Length(max=100)],
-        description="Friendly name for this account (e.g. 'Meade Dev').",
+        description="The workspace username as shown in the Uplynk CMS "
+                    "(e.g. 'dma_meade-dev').",
     )
     workspace_id = StringField(
         "Workspace ID",
