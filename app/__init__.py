@@ -8,6 +8,7 @@ import os
 from flask import Flask
 
 from app.config import Config
+from app.models import db
 
 
 def create_app(config_class: type[Config] = Config) -> Flask:
@@ -16,6 +17,9 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.config.from_object(config_class)
 
     _configure_logging(app)
+
+    # Extensions
+    db.init_app(app)
 
     # Blueprints
     from app.main import bp as main_bp
