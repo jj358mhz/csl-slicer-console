@@ -1,0 +1,40 @@
+[project]
+name = "csl-slicer-console"
+version = "0.1.0"
+description = "Web console for controlling Uplynk CSL ingest slicers"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Jeff Johnston", email = "jj358mhz@gmail.com" }]
+
+dependencies = [
+    "flask>=3.0",
+    "flask-sqlalchemy>=3.1",
+    "flask-login>=0.6.3",
+    "flask-wtf>=1.2",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "python-dotenv>=1.0",
+    "requests>=2.32",
+    "cryptography>=43.0",
+    "argon2-cffi>=23.1",
+    "gunicorn>=23.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+    "pytest>=8.0",
+    "pytest-flask>=1.3",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
