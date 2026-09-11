@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Users — Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Users</h1>
+  <a href="{{ url_for('admin.new_user') }}" class="button button--primary">+ Add User</a>
+</div>
+
+{% if users %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Slicers</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+        <tr>
+          <td><strong>{{ u.email }}</strong></td>
+          <td>{% if u.is_admin %}<span class="badge badge--admin">admin</span>{% else %}user{% endif %}</td>
+          <td>{% if u.is_active %}<span class="badge badge--active">active</span>{% else %}<span class="muted">inactive</span>{% endif %}</td>
+          <td>{{ u.slicers | length }}</td>
+          <td>{{ u.created_at.strftime('%Y-%m-%d') }}</td>
+          <td class="actions">
+            <a href="{{ url_for('admin.assign_slicers', user_id=u.id) }}">Slicers</a>
+            <a href="{{ url_for('admin.edit_user', user_id=u.id) }}">Edit</a>
+            {% if u.id != current_user.id %}
+              <form method="post"
+                    action="{{ url_for('admin.delete_user', user_id=u.id) }}"
+                    class="inline"
+                    onsubmit="return confirm('Delete user {{ u.email }}?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="link-button link-button--danger">Delete</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <div class="card">
+    <p class="muted">No users yet.</p>
+  </div>
+{% endif %}
+{% endblock %}

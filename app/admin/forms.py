@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileField
-from wtforms import PasswordField, StringField, SubmitField
-from wtforms.validators import DataRequired, Length, Optional
+from wtforms import (
+    BooleanField,
+    PasswordField,
+    SelectMultipleField,
+    StringField,
+    SubmitField,
+)
+from wtforms.validators import DataRequired, Email, Length, Optional
+from wtforms.widgets import CheckboxInput, ListWidget
 
 
 class UplynkAccountForm(FlaskForm):
@@ -44,4 +51,36 @@ class UplynkAccountForm(FlaskForm):
                     "video.services.ingest.cloudslicer.live:read. "
                     "Leave blank to keep existing value.",
     )
+    submit = SubmitField("Save")
+
+
+class UserForm(FlaskForm):
+    """Create or edit a user."""
+
+    email = StringField(
+        "Email",
+        validators=[DataRequired(), Email(), Length(max=255)],
+    )
+    password = PasswordField(
+        "Password",
+        validators=[Optional(), Length(min=8, max=255)],
+        description="At least 8 characters. Leave blank on edit to keep the current password.",
+        render_kw={"autocomplete": "new-password"},
+    )
+    is_admin = BooleanField("Admin")
+    is_active = BooleanField("Active", default=True)
+    submit = SubmitField("Save")
+
+
+class MultiCheckboxField(SelectMultipleField):
+    """A SelectMultipleField that renders as a list of checkboxes."""
+
+    widget = ListWidget(prefix_label=False)
+    option_widget = CheckboxInput()
+
+
+class UserSlicerAssignmentForm(FlaskForm):
+    """Assign slicers to a user via a list of checkboxes."""
+
+    slicer_ids = MultiCheckboxField("Slicers", coerce=int)
     submit = SubmitField("Save")

@@ -2,9 +2,50 @@
 {% block title %}Dashboard — CSL Slicer Console{% endblock %}
 
 {% block content %}
-<div class="card">
-  <h1>Welcome, {{ current_user.email }}</h1>
-  <p>You're signed in{% if current_user.is_admin %} as an <strong>admin</strong>{% endif %}.</p>
-  <p class="muted">Slicer dashboard coming in Step 9.</p>
+<div class="page-header">
+  <h1>Your Slicers</h1>
 </div>
+
+{% if slicers %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Slicer</th>
+        <th>Account</th>
+        <th>Region</th>
+        <th>State</th>
+        <th>Plugin</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in slicers %}
+        <tr>
+          <td><strong>{{ s.slicer_id }}</strong></td>
+          <td>{{ s.uplynk_account.label }}</td>
+          <td>{{ s.region or '—' }}</td>
+          <td>
+            <span class="badge badge--state">{{ s.last_state or 'unknown' }}</span>
+          </td>
+          <td class="mono">
+            {% if s.plugin_id %}{{ s.plugin_id }}{% else %}<span class="muted">—</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="margin-top: 1rem;">
+    Control buttons come in Step 9.
+  </p>
+{% else %}
+  <div class="card">
+    <p class="muted">
+      No slicers assigned to you yet.
+      {% if current_user.is_admin %}
+        Head to <a href="{{ url_for('admin.list_users') }}">Users</a> to assign some.
+      {% else %}
+        Ask an admin to assign you some slicers.
+      {% endif %}
+    </p>
+  </div>
+{% endif %}
 {% endblock %}

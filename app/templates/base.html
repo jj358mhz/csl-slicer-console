@@ -13,7 +13,8 @@
             <nav class="site-header__nav">
         {% if current_user.is_authenticated %}
           {% if current_user.is_admin %}
-            <a href="{{ url_for('admin.list_accounts') }}" class="site-header__link">Uplynk Accounts</a>
+              <a href="{{ url_for('admin.list_users') }}" class="site-header__link">Users</a>
+              <a href="{{ url_for('admin.list_accounts') }}" class="site-header__link">Uplynk Accounts</a>
           {% endif %}
           <span class="site-header__user">{{ current_user.email }}</span>
           <form method="post" action="{{ url_for('auth.logout') }}" class="site-header__logout">

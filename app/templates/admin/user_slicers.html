@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Assign slicers to {{ user.email }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Slicers for {{ user.email }}</h1>
+  <a href="{{ url_for('admin.list_users') }}" class="button button--link">← Back to users</a>
+</div>
+
+{% if slicers %}
+  <form method="post">
+    {{ form.hidden_tag() }}
+
+    <div class="card">
+      <ul class="checkbox-list">
+        {% for value, label in form.slicer_ids.choices %}
+          <li>
+            <label class="checkbox-row">
+              <input type="checkbox" name="slicer_ids" value="{{ value }}"
+                     {% if value in (form.slicer_ids.data or []) %}checked{% endif %}>
+              <span>{{ label }}</span>
+            </label>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="form-actions">
+      {{ form.submit(class="button button--primary") }}
+    </div>
+  </form>
+{% else %}
+  <div class="card">
+    <p class="muted">
+      No active slicers to assign. Add an Uplynk account and run Sync first.
+    </p>
+  </div>
+{% endif %}
+{% endblock %}
