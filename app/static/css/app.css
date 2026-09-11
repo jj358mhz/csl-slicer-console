@@ -267,3 +267,27 @@ form.inline { display: inline; margin: 0; }
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border);
 }
+
+.filter-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+.filter-field { display: flex; flex-direction: column; gap: 0.25rem; min-width: 180px; }
+.filter-field span { color: var(--text-muted); font-size: 0.8rem; }
+.filter-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+.audit-response {
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}

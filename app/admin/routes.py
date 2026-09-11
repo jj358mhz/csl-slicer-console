@@ -290,3 +290,47 @@ def assign_slicers(user_id: int):
         user=user,
         slicers=active_slicers,
     )
+
+# ---------------------------------------------------------------------------
+# Audit log
+# ---------------------------------------------------------------------------
+
+@bp.route("/audit")
+@admin_required
+def audit_log():
+    from flask import request
+
+    from app.models import AuditEvent
+
+    # Filters via query string
+    user_id = request.args.get("user_id", type=int)
+    slicer_id = request.args.get("slicer_id", type=int)
+    method = request.args.get("method", "").strip() or None
+
+    query = db.session.query(AuditEvent).order_by(AuditEvent.timestamp.desc())
+    if user_id:
+        query = query.filter(AuditEvent.user_id == user_id)
+    if slicer_id:
+        query = query.filter(AuditEvent.slicer_id == slicer_id)
+    if method:
+        query = query.filter(AuditEvent.method == method)
+
+    # Cap at most-recent 500 to keep the page snappy
+    events = query.limit(500).all()
+
+    # For the filter dropdowns
+    all_users = db.session.query(User).order_by(User.email).all()
+    all_slicers = (
+        db.session.query(Slicer)
+        .join(UplynkAccount)
+        .order_by(UplynkAccount.label, Slicer.slicer_id)
+        .all()
+    )
+
+    return render_template(
+        "admin/audit_log.html",
+        events=events,
+        all_users=all_users,
+        all_slicers=all_slicers,
+        filters={"user_id": user_id, "slicer_id": slicer_id, "method": method},
+    )

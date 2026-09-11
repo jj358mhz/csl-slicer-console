@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}My History — CSL Slicer Console{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>My History</h1>
+  <span class="muted">{{ events | length }} event{% if events | length != 1 %}s{% endif %} (last 200)</span>
+</div>
+
+{% if events %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>When</th>
+        <th>Slicer</th>
+        <th>Method</th>
+        <th>Status</th>
+        <th>Response</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in events %}
+        <tr>
+          <td class="mono">{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+          <td class="mono">
+            {% if e.slicer %}
+              [{{ e.slicer.uplynk_account.label }}] {{ e.slicer.slicer_id }}
+            {% else %}
+              <span class="muted">(deleted)</span>
+            {% endif %}
+          </td>
+          <td class="mono">
+            {{ e.method }}
+            {% if e.dry_run %}<span class="badge">dry-run</span>{% endif %}
+          </td>
+          <td>
+            {% if e.status_code %}
+              <span class="badge {% if 200 <= e.status_code < 300 %}badge--active{% endif %}">{{ e.status_code }}</span>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td class="mono audit-response">{{ e.response_snippet or '' }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <div class="card">
+    <p class="muted">You haven't made any control actions yet.</p>
+  </div>
+{% endif %}
+{% endblock %}
