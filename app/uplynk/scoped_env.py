@@ -53,9 +53,7 @@ def parse_scoped_env(content: str | bytes) -> ScopedEnv:
 
     missing = [f for f in REQUIRED_FIELDS if not values.get(f)]
     if missing:
-        raise ScopedEnvParseError(
-            f"Missing required field(s): {', '.join(missing)}"
-        )
+        raise ScopedEnvParseError(f"Missing required field(s): {', '.join(missing)}")
 
     return ScopedEnv(
         kid=values["KID"],

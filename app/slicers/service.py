@@ -51,14 +51,15 @@ def control_slicer(
     error) are captured into ControlOutcome.error and written to audit_events.
     """
     if not _user_can_control(user, slicer):
-        raise SlicerAccessDenied(
-            f"User {user.email} is not assigned to slicer {slicer.slicer_id}"
-        )
+        raise SlicerAccessDenied(f"User {user.email} is not assigned to slicer {slicer.slicer_id}")
 
     method_path = SLICER_METHODS.get(method_name)
     if method_path is None:
         return _record_and_return(
-            user, slicer, method_name, dry_run,
+            user,
+            slicer,
+            method_name,
+            dry_run,
             error=f"Unknown method '{method_name}'",
         )
 
@@ -67,16 +68,20 @@ def control_slicer(
         api_key = decrypt(account.legacy_api_key_encrypted)
     except Exception as e:
         return _record_and_return(
-            user, slicer, method_name, dry_run,
+            user,
+            slicer,
+            method_name,
+            dry_run,
             error=f"Failed to decrypt API key: {e}",
         )
 
     if dry_run:
-        current_app.logger.info(
-            "DRY RUN — would POST %s to %s", method_path, slicer.slicer_api_url
-        )
+        current_app.logger.info("DRY RUN — would POST %s to %s", method_path, slicer.slicer_api_url)
         return _record_and_return(
-            user, slicer, method_name, dry_run,
+            user,
+            slicer,
+            method_name,
+            dry_run,
             result=CSLResult(status_code=0, body="[dry-run]", ok=True),
         )
 
@@ -84,12 +89,18 @@ def control_slicer(
         result = call_slicer(slicer.slicer_api_url, method_path, api_key)
     except CSLError as e:
         return _record_and_return(
-            user, slicer, method_name, dry_run,
+            user,
+            slicer,
+            method_name,
+            dry_run,
             error=str(e),
         )
 
     return _record_and_return(
-        user, slicer, method_name, dry_run,
+        user,
+        slicer,
+        method_name,
+        dry_run,
         result=result,
     )
 

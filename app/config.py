@@ -13,9 +13,7 @@ def _require(name: str) -> str:
     """Read a required env var or raise a clear error."""
     value = os.environ.get(name)
     if not value:
-        raise RuntimeError(
-            f"{name} is not set. Copy .env.example to .env and fill in real values."
-        )
+        raise RuntimeError(f"{name} is not set. Copy .env.example to .env and fill in real values.")
     return value
 
 

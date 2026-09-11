@@ -27,9 +27,8 @@ def test_two_encryptions_differ(app):
 
 
 def test_decrypt_bad_ciphertext_raises(app):
-    with app.app_context():
-        with pytest.raises(CryptoError):
-            decrypt("not-a-valid-token")
+    with app.app_context(), pytest.raises(CryptoError):
+        decrypt("not-a-valid-token")
 
 
 def test_mask_short_secret():

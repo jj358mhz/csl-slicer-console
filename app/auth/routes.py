@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
-from urllib.parse import urlparse
 
 from app.auth.forms import LoginForm
 from app.auth.passwords import verify_password
@@ -20,11 +21,7 @@ def login():
 
     form = LoginForm()
     if form.validate_on_submit():
-        user = (
-            db.session.query(User)
-            .filter_by(email=form.email.data.lower().strip())
-            .first()
-        )
+        user = db.session.query(User).filter_by(email=form.email.data.lower().strip()).first()
         if user and user.is_active and verify_password(user.password_hash, form.password.data):
             login_user(user, remember=form.remember.data)
             next_page = request.args.get("next")

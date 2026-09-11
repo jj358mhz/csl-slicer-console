@@ -30,11 +30,7 @@ def test_creating_user_logs_event(app, client):
         follow_redirects=True,
     )
     with app.app_context():
-        event = (
-            db.session.query(AdminEvent)
-            .filter_by(category="user", action="create")
-            .one()
-        )
+        event = db.session.query(AdminEvent).filter_by(category="user", action="create").one()
         assert "logged@example.com" in event.summary
         assert event.target == "logged@example.com"
 
@@ -140,9 +136,5 @@ def test_event_records_actor(app, client):
     )
     with app.app_context():
         admin = db.session.query(User).filter_by(email="test@example.com").one()
-        event = (
-            db.session.query(AdminEvent)
-            .filter_by(category="user", action="create")
-            .one()
-        )
+        event = db.session.query(AdminEvent).filter_by(category="user", action="create").one()
         assert event.actor_id == admin.id

@@ -39,14 +39,11 @@ def _apply_scoped_env(acct: UplynkAccount, file_storage) -> str | None:
 # Uplynk account management
 # ---------------------------------------------------------------------------
 
+
 @bp.route("/uplynk-accounts")
 @admin_required
 def list_accounts():
-    accounts = (
-        db.session.query(UplynkAccount)
-        .order_by(UplynkAccount.label)
-        .all()
-    )
+    accounts = db.session.query(UplynkAccount).order_by(UplynkAccount.label).all()
     previews = {}
     for acct in accounts:
         try:
@@ -82,7 +79,12 @@ def new_account():
             else:
                 db.session.add(acct)
                 db.session.commit()
-                log_admin_event("uplynk_account", "create", f"Created Uplynk account '{acct.label}'", target=acct.label)
+                log_admin_event(
+                    "uplynk_account",
+                    "create",
+                    f"Created Uplynk account '{acct.label}'",
+                    target=acct.label,
+                )
                 flash(f"Uplynk account '{acct.label}' created.", "success")
                 return redirect(url_for("admin.list_accounts"))
     return render_template(
@@ -112,7 +114,12 @@ def edit_account(account_id: int):
             flash(err, "error")
         else:
             db.session.commit()
-            log_admin_event("uplynk_account", "update", f"Updated Uplynk account '{acct.label}'", target=acct.label)
+            log_admin_event(
+                "uplynk_account",
+                "update",
+                f"Updated Uplynk account '{acct.label}'",
+                target=acct.label,
+            )
             flash(f"Uplynk account '{acct.label}' updated.", "success")
             return redirect(url_for("admin.list_accounts"))
 
@@ -150,10 +157,13 @@ def sync_account_route(account_id: int):
     result = sync_account(acct)
 
     if result.error:
-        log_admin_event("sync", "error", f"Sync failed for '{acct.label}': {result.error}", target=acct.label)
+        log_admin_event(
+            "sync", "error", f"Sync failed for '{acct.label}': {result.error}", target=acct.label
+        )
     else:
         log_admin_event(
-            "sync", "run",
+            "sync",
+            "run",
             f"Synced '{acct.label}': {result.created} new, {result.updated} updated, {result.deactivated} deactivated",
             target=acct.label,
         )
@@ -174,6 +184,7 @@ def sync_account_route(account_id: int):
 # User management
 # ---------------------------------------------------------------------------
 
+
 @bp.route("/users")
 @admin_required
 def list_users():
@@ -188,9 +199,7 @@ def new_user():
     if form.validate_on_submit():
         if not form.password.data:
             flash("Password is required when creating a new user.", "error")
-        elif db.session.query(User).filter_by(
-            email=form.email.data.lower().strip()
-        ).first():
+        elif db.session.query(User).filter_by(email=form.email.data.lower().strip()).first():
             flash("A user with that email already exists.", "error")
         else:
             user = User(
@@ -201,7 +210,12 @@ def new_user():
             )
             db.session.add(user)
             db.session.commit()
-            log_admin_event("user", "create", f"Created user '{user.email}'{' (admin)' if user.is_admin else ''}", target=user.email)
+            log_admin_event(
+                "user",
+                "create",
+                f"Created user '{user.email}'{' (admin)' if user.is_admin else ''}",
+                target=user.email,
+            )
             flash(f"User '{user.email}' created.", "success")
             return redirect(url_for("admin.list_users"))
     return render_template("admin/user_form.html", form=form, mode="new")
@@ -219,17 +233,11 @@ def edit_user(user_id: int):
 
     if form.validate_on_submit():
         new_email = form.email.data.lower().strip()
-        clash = (
-            db.session.query(User)
-            .filter(User.email == new_email, User.id != user.id)
-            .first()
-        )
+        clash = db.session.query(User).filter(User.email == new_email, User.id != user.id).first()
         if clash:
             flash("Another user already has that email.", "error")
         else:
-            if user.id == current_user.id and (
-                not form.is_admin.data or not form.is_active.data
-            ):
+            if user.id == current_user.id and (not form.is_admin.data or not form.is_active.data):
                 flash("You can't remove your own admin status or deactivate yourself.", "error")
             else:
                 user.email = new_email
@@ -266,6 +274,7 @@ def delete_user(user_id: int):
 # Slicer assignment
 # ---------------------------------------------------------------------------
 
+
 @bp.route("/users/<int:user_id>/slicers", methods=["GET", "POST"])
 @admin_required
 def assign_slicers(user_id: int):
@@ -283,8 +292,7 @@ def assign_slicers(user_id: int):
 
     form = UserSlicerAssignmentForm()
     form.slicer_ids.choices = [
-        (s.id, f"[{s.uplynk_account.label}] {s.slicer_id} ({s.region})")
-        for s in active_slicers
+        (s.id, f"[{s.uplynk_account.label}] {s.slicer_id} ({s.region})") for s in active_slicers
     ]
 
     if form.validate_on_submit():
@@ -292,13 +300,13 @@ def assign_slicers(user_id: int):
         user.slicers = [s for s in active_slicers if s.id in selected_ids]
         db.session.commit()
         log_admin_event(
-            "user", "assign_slicers",
+            "user",
+            "assign_slicers",
             f"Assigned {len(user.slicers)} slicer(s) to '{user.email}'",
             target=user.email,
         )
         flash(
-            f"Slicer assignments updated for '{user.email}' "
-            f"({len(user.slicers)} assigned).",
+            f"Slicer assignments updated for '{user.email}' ({len(user.slicers)} assigned).",
             "success",
         )
         return redirect(url_for("admin.list_users"))
@@ -312,9 +320,11 @@ def assign_slicers(user_id: int):
         slicers=active_slicers,
     )
 
+
 # ---------------------------------------------------------------------------
 # Audit log
 # ---------------------------------------------------------------------------
+
 
 @bp.route("/audit")
 @admin_required
@@ -378,9 +388,11 @@ def audit_log():
         filters={"user_id": user_id, "slicer_id": slicer_id, "method": method},
     )
 
+
 # ---------------------------------------------------------------------------
 # Manual slicer CRUD (fallback when no scoped API key)
 # ---------------------------------------------------------------------------
+
 
 @bp.route("/slicers")
 @admin_required
@@ -431,7 +443,8 @@ def new_slicer():
             db.session.add(slicer)
             db.session.commit()
             log_admin_event(
-                "slicer", "create",
+                "slicer",
+                "create",
                 f"Manually added slicer '{slicer.slicer_id}' under '{slicer.uplynk_account.label}'",
                 target=slicer.slicer_id,
             )
@@ -461,7 +474,12 @@ def edit_slicer(slicer_id_pk: int):
         slicer.region = form.region.data.strip() or None
         slicer.protocol = form.protocol.data.strip() or None
         db.session.commit()
-        log_admin_event("slicer", "update", f"Updated manual slicer '{slicer.slicer_id}'", target=slicer.slicer_id)
+        log_admin_event(
+            "slicer",
+            "update",
+            f"Updated manual slicer '{slicer.slicer_id}'",
+            target=slicer.slicer_id,
+        )
         flash(f"Slicer '{slicer.slicer_id}' updated.", "success")
         return redirect(url_for("admin.list_slicers"))
 

@@ -62,9 +62,7 @@ def _configure_logging(app: Flask) -> None:
     level = getattr(logging, level_name, logging.INFO)
 
     handler = logging.StreamHandler()
-    handler.setFormatter(
-        logging.Formatter("[%(asctime)s] %(levelname)s in %(name)s: %(message)s")
-    )
+    handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s in %(name)s: %(message)s"))
     app.logger.handlers.clear()
     app.logger.addHandler(handler)
     app.logger.setLevel(level)

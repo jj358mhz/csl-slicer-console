@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import (
@@ -18,7 +18,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
@@ -52,10 +52,8 @@ class User(Base):
     def get_id(self) -> str:
         return str(self.id)
 
-    slicers: Mapped[list["Slicer"]] = relationship(
-        secondary="user_slicers", back_populates="users"
-    )
-    audit_events: Mapped[list["AuditEvent"]] = relationship(back_populates="user")
+    slicers: Mapped[list[Slicer]] = relationship(secondary="user_slicers", back_populates="users")
+    audit_events: Mapped[list[AuditEvent]] = relationship(back_populates="user")
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"
@@ -79,14 +77,12 @@ class UplynkAccount(Base):
     scoped_private_b64_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     scoped_scp: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    last_synced_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
 
-    slicers: Mapped[list["Slicer"]] = relationship(
+    slicers: Mapped[list[Slicer]] = relationship(
         back_populates="uplynk_account", cascade="all, delete-orphan"
     )
 
@@ -126,22 +122,16 @@ class Slicer(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_manual: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    last_seen_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
 
-    __table_args__ = (
-        UniqueConstraint("uplynk_account_id", "slicer_id", name="uq_account_slicer"),
-    )
+    __table_args__ = (UniqueConstraint("uplynk_account_id", "slicer_id", name="uq_account_slicer"),)
 
-    uplynk_account: Mapped["UplynkAccount"] = relationship(back_populates="slicers")
-    users: Mapped[list["User"]] = relationship(
-        secondary="user_slicers", back_populates="slicers"
-    )
-    audit_events: Mapped[list["AuditEvent"]] = relationship(back_populates="slicer")
+    uplynk_account: Mapped[UplynkAccount] = relationship(back_populates="slicers")
+    users: Mapped[list[User]] = relationship(secondary="user_slicers", back_populates="slicers")
+    audit_events: Mapped[list[AuditEvent]] = relationship(back_populates="slicer")
 
     def __repr__(self) -> str:
         return f"<Slicer {self.slicer_id}>"
@@ -184,8 +174,8 @@ class AuditEvent(Base):
         DateTime(timezone=True), default=utcnow, nullable=False, index=True
     )
 
-    user: Mapped["User | None"] = relationship(back_populates="audit_events")
-    slicer: Mapped["Slicer | None"] = relationship(back_populates="audit_events")
+    user: Mapped[User | None] = relationship(back_populates="audit_events")
+    slicer: Mapped[Slicer | None] = relationship(back_populates="audit_events")
 
     def __repr__(self) -> str:
         return f"<AuditEvent {self.method} status={self.status_code}>"
@@ -213,7 +203,7 @@ class AdminEvent(Base):
         DateTime(timezone=True), default=utcnow, nullable=False, index=True
     )
 
-    actor: Mapped["User | None"] = relationship()
+    actor: Mapped[User | None] = relationship()
 
     def __repr__(self) -> str:
         return f"<AdminEvent {self.category}.{self.action} by {self.actor_id}>"

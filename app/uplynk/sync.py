@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from flask import current_app
 
@@ -65,7 +65,7 @@ def sync_account(account: UplynkAccount) -> SyncResult:
         return result
 
     _apply_sync(account, discovered, result)
-    account.last_synced_at = datetime.now(timezone.utc)
+    account.last_synced_at = datetime.now(UTC)
     db.session.commit()
     return result
 
@@ -76,13 +76,11 @@ def _apply_sync(
     result: SyncResult,
 ) -> None:
     """Upsert discovered slicers, deactivate ones no longer seen."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     existing = {
         s.slicer_id: s
-        for s in db.session.query(Slicer)
-        .filter_by(uplynk_account_id=account.id)
-        .all()
+        for s in db.session.query(Slicer).filter_by(uplynk_account_id=account.id).all()
     }
 
     seen_ids: set[str] = set()
@@ -99,7 +97,8 @@ def _apply_sync(
                     region=ds.region,
                     protocol=ds.protocol,
                     plugin_id=ds.plugin_id,
-                    plugin_version=ds.plugin_version,                    last_state=ds.state,
+                    plugin_version=ds.plugin_version,
+                    last_state=ds.state,
                     description=ds.description,
                     is_active=True,
                     last_seen_at=now,

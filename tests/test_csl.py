@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
-from app.uplynk.csl import CSLError, CSLResult, SLICER_METHODS, call_slicer
+from app.uplynk.csl import SLICER_METHODS, CSLError, CSLResult, call_slicer
 
 
 def _mock_response(status_code=200, json_data=None, text=""):
@@ -51,9 +51,7 @@ def test_call_slicer_success_text():
 def test_call_slicer_signs_body():
     session = MagicMock(spec=requests.Session)
     session.post.return_value = _mock_response(200, {})
-    call_slicer(
-        "https://ingest.example.com/slicer1", "/blackout", "test-key", session=session
-    )
+    call_slicer("https://ingest.example.com/slicer1", "/blackout", "test-key", session=session)
     _, kwargs = session.post.call_args
     body = kwargs["json"]
     assert set(body) == {"timestamp", "cnonce", "sig"}
@@ -65,9 +63,7 @@ def test_call_slicer_signs_body():
 def test_call_slicer_url_composition():
     session = MagicMock(spec=requests.Session)
     session.post.return_value = _mock_response(200, {})
-    call_slicer(
-        "https://ingest.example.com/slicer1/", "/blackout", "k", session=session
-    )
+    call_slicer("https://ingest.example.com/slicer1/", "/blackout", "k", session=session)
     args, _ = session.post.call_args
     # Trailing slash on base_uri is stripped; single slash between base and path
     assert args[0] == "https://ingest.example.com/slicer1/blackout"

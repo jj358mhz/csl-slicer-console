@@ -30,7 +30,7 @@ def test_root_url_is_optional():
 
 
 def test_strips_quotes():
-    content = 'KID="key-123"\nSUB=\'owner\'\nPRIVATE_B64=b\nSCP=s\n'
+    content = "KID=\"key-123\"\nSUB='owner'\nPRIVATE_B64=b\nSCP=s\n"
     result = parse_scoped_env(content)
     assert result.kid == "key-123"
     assert result.sub == "owner"

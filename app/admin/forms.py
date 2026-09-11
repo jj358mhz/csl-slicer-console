@@ -27,8 +27,7 @@ class UplynkAccountForm(FlaskForm):
     label = StringField(
         "Workspace Username",
         validators=[DataRequired(), Length(max=100)],
-        description="The workspace username as shown in the Uplynk CMS "
-                    "(e.g. 'dma_meade-dev').",
+        description="The workspace username as shown in the Uplynk CMS (e.g. 'dma_meade-dev').",
     )
     workspace_id = StringField(
         "Workspace ID",
@@ -39,7 +38,7 @@ class UplynkAccountForm(FlaskForm):
         "Legacy API Key",
         validators=[Optional(), Length(max=500)],
         description="Used for CSL slicer control (SHA1 signing). "
-                    "Leave blank to keep existing value.",
+        "Leave blank to keep existing value.",
         render_kw={"autocomplete": "off"},
     )
     scoped_env_file = FileField(
@@ -49,9 +48,9 @@ class UplynkAccountForm(FlaskForm):
             FileAllowed(["env", "txt"], "Upload the .env file from the Uplynk CMS."),
         ],
         description="Download the .env file from Settings → Scoped API Keys "
-                    "in the Uplynk CMS. Required scope: "
-                    "video.services.ingest.cloudslicer.live:read. "
-                    "Leave blank to keep existing value.",
+        "in the Uplynk CMS. Required scope: "
+        "video.services.ingest.cloudslicer.live:read. "
+        "Leave blank to keep existing value.",
     )
     submit = SubmitField("Save")
 
@@ -86,6 +85,7 @@ class UserSlicerAssignmentForm(FlaskForm):
 
     slicer_ids = MultiCheckboxField("Slicers", coerce=int)
     submit = SubmitField("Save")
+
 
 class SlicerForm(FlaskForm):
     """Manually add or edit a slicer under an Uplynk account."""

@@ -35,7 +35,7 @@ class DiscoveredSlicer:
     description: str | None
 
     @classmethod
-    def from_api(cls, item: dict[str, Any]) -> "DiscoveredSlicer":
+    def from_api(cls, item: dict[str, Any]) -> DiscoveredSlicer:
         plugin = item.get("plugin") or {}
         status = item.get("status") or {}
         return cls(
@@ -126,18 +126,14 @@ class UplynkDiscoveryClient:
             raise UplynkAPIError(f"Request to Uplynk failed: {e}") from e
 
         if response.status_code == 401:
-            raise UplynkAPIError(
-                "Uplynk API rejected the JWT (401) — check KID/SUB/PRIVATE_B64"
-            )
+            raise UplynkAPIError("Uplynk API rejected the JWT (401) — check KID/SUB/PRIVATE_B64")
         if response.status_code == 403:
             raise UplynkAPIError(
-                "JWT lacks required scope "
-                "(video.services.ingest.cloudslicer.live:read)"
+                "JWT lacks required scope (video.services.ingest.cloudslicer.live:read)"
             )
         if response.status_code != 200:
             raise UplynkAPIError(
-                f"Uplynk API returned HTTP {response.status_code}: "
-                f"{response.text[:200]}"
+                f"Uplynk API returned HTTP {response.status_code}: {response.text[:200]}"
             )
 
         try:

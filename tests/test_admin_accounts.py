@@ -18,6 +18,7 @@ def _login(client, email="test@example.com", password="test-password-123"):
 
 def _make_regular_user(app):
     from app.auth.passwords import hash_password
+
     with app.app_context():
         u = User(
             email="user@example.com",
