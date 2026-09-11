@@ -189,3 +189,31 @@ class AuditEvent(Base):
 
     def __repr__(self) -> str:
         return f"<AuditEvent {self.method} status={self.status_code}>"
+
+
+class AdminEvent(Base):
+    """Record of administrative actions — user CRUD, account CRUD, slicer CRUD, sync."""
+
+    __tablename__ = "admin_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Broad category — helps filtering in the UI. Examples:
+    # 'user', 'uplynk_account', 'slicer', 'sync', 'auth'
+    category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    # Specific action — 'create', 'update', 'delete', 'assign_slicers', 'sync', etc.
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Free-form summary of what happened, human-readable.
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    # Optional pointer to the target object (email for user, label for account, etc.)
+    target: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False, index=True
+    )
+
+    actor: Mapped["User | None"] = relationship()
+
+    def __repr__(self) -> str:
+        return f"<AdminEvent {self.category}.{self.action} by {self.actor_id}>"

@@ -4,93 +4,179 @@
 {% block content %}
 <div class="page-header">
   <h1>Audit Log</h1>
-  <span class="muted">{{ events | length }} event{% if events | length != 1 %}s{% endif %} (last 500)</span>
+  <span class="muted">
+    {% if tab == 'admin' %}
+      {{ admin_events | length }} event{% if admin_events | length != 1 %}s{% endif %} (last 500)
+    {% else %}
+      {{ events | length }} event{% if events | length != 1 %}s{% endif %} (last 500)
+    {% endif %}
+  </span>
 </div>
 
-<form method="get" class="filter-bar">
-  <label class="filter-field">
-    <span>User</span>
-    <select name="user_id" class="input">
-      <option value="">All users</option>
-      {% for u in all_users %}
-        <option value="{{ u.id }}" {% if filters.user_id == u.id %}selected{% endif %}>
-          {{ u.email }}
-        </option>
-      {% endfor %}
-    </select>
-  </label>
+<div class="tabs">
+  <a href="{{ url_for('admin.audit_log', tab='control') }}"
+     class="tab {% if tab == 'control' %}tab--active{% endif %}">
+    Slicer Control
+  </a>
+  <a href="{{ url_for('admin.audit_log', tab='admin') }}"
+     class="tab {% if tab == 'admin' %}tab--active{% endif %}">
+    Admin Activity
+  </a>
+</div>
 
-  <label class="filter-field">
-    <span>Slicer</span>
-    <select name="slicer_id" class="input">
-      <option value="">All slicers</option>
-      {% for s in all_slicers %}
-        <option value="{{ s.id }}" {% if filters.slicer_id == s.id %}selected{% endif %}>
-          [{{ s.uplynk_account.label }}] {{ s.slicer_id }}
-        </option>
-      {% endfor %}
-    </select>
-  </label>
+{% if tab == 'admin' %}
+  {# ============ Admin Activity ============ #}
+  <form method="get" class="filter-bar">
+    <input type="hidden" name="tab" value="admin">
 
-  <label class="filter-field">
-    <span>Method</span>
-    <select name="method" class="input">
-      <option value="">All methods</option>
-      {% for m in ['status', 'state', 'content_start', 'blackout'] %}
-        <option value="{{ m }}" {% if filters.method == m %}selected{% endif %}>{{ m }}</option>
-      {% endfor %}
-    </select>
-  </label>
+    <label class="filter-field">
+      <span>Actor</span>
+      <select name="actor_id" class="input">
+        <option value="">All actors</option>
+        {% for u in all_users %}
+          <option value="{{ u.id }}" {% if filters.actor_id == u.id %}selected{% endif %}>
+            {{ u.email }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
 
-  <div class="filter-actions">
-    <button type="submit" class="button button--primary">Filter</button>
-    <a href="{{ url_for('admin.audit_log') }}" class="button button--link">Reset</a>
-  </div>
-</form>
+    <label class="filter-field">
+      <span>Category</span>
+      <select name="category" class="input">
+        <option value="">All categories</option>
+        {% for c in categories %}
+          <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </label>
 
-{% if events %}
-  <table class="data-table">
-    <thead>
-      <tr>
-        <th>When</th>
-        <th>User</th>
-        <th>Slicer</th>
-        <th>Method</th>
-        <th>Status</th>
-        <th>Response</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for e in events %}
+    <div class="filter-actions">
+      <button type="submit" class="button button--primary">Filter</button>
+      <a href="{{ url_for('admin.audit_log', tab='admin') }}" class="button button--link">Reset</a>
+    </div>
+  </form>
+
+  {% if admin_events %}
+    <table class="data-table">
+      <thead>
         <tr>
-          <td class="mono">{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-          <td>{% if e.user %}{{ e.user.email }}{% else %}<span class="muted">(deleted)</span>{% endif %}</td>
-          <td class="mono">
-            {% if e.slicer %}
-              [{{ e.slicer.uplynk_account.label }}] {{ e.slicer.slicer_id }}
-            {% else %}
-              <span class="muted">(deleted)</span>
-            {% endif %}
-          </td>
-          <td class="mono">
-            {{ e.method }}
-            {% if e.dry_run %}<span class="badge">dry-run</span>{% endif %}
-          </td>
-          <td>
-            {% if e.status_code %}
-              <span class="badge {% if 200 <= e.status_code < 300 %}badge--active{% endif %}">{{ e.status_code }}</span>
-            {% else %}
-              <span class="muted">—</span>
-            {% endif %}
-          </td>
-          <td class="mono audit-response">{{ e.response_snippet or '' }}</td>
+          <th>When</th>
+          <th>Actor</th>
+          <th>Category</th>
+          <th>Action</th>
+          <th>Target</th>
+          <th>Summary</th>
         </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for e in admin_events %}
+          <tr>
+            <td class="mono">{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{% if e.actor %}{{ e.actor.email }}{% else %}<span class="muted">(deleted)</span>{% endif %}</td>
+            <td class="mono">{{ e.category }}</td>
+            <td class="mono">{{ e.action }}</td>
+            <td class="mono">{{ e.target or '' }}</td>
+            <td class="audit-response">{{ e.summary }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="card">
+      <p class="muted">No admin events match those filters.</p>
+    </div>
+  {% endif %}
+
 {% else %}
-  <div class="card">
-    <p class="muted">No audit events match those filters.</p>
-  </div>
+  {# ============ Slicer Control ============ #}
+  <form method="get" class="filter-bar">
+    <input type="hidden" name="tab" value="control">
+
+    <label class="filter-field">
+      <span>User</span>
+      <select name="user_id" class="input">
+        <option value="">All users</option>
+        {% for u in all_users %}
+          <option value="{{ u.id }}" {% if filters.user_id == u.id %}selected{% endif %}>
+            {{ u.email }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="filter-field">
+      <span>Slicer</span>
+      <select name="slicer_id" class="input">
+        <option value="">All slicers</option>
+        {% for s in all_slicers %}
+          <option value="{{ s.id }}" {% if filters.slicer_id == s.id %}selected{% endif %}>
+            [{{ s.uplynk_account.label }}] {{ s.slicer_id }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="filter-field">
+      <span>Method</span>
+      <select name="method" class="input">
+        <option value="">All methods</option>
+        {% for m in ['status', 'state', 'content_start', 'blackout'] %}
+          <option value="{{ m }}" {% if filters.method == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <div class="filter-actions">
+      <button type="submit" class="button button--primary">Filter</button>
+      <a href="{{ url_for('admin.audit_log', tab='control') }}" class="button button--link">Reset</a>
+    </div>
+  </form>
+
+  {% if events %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>User</th>
+          <th>Slicer</th>
+          <th>Method</th>
+          <th>Status</th>
+          <th>Response</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+          <tr>
+            <td class="mono">{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{% if e.user %}{{ e.user.email }}{% else %}<span class="muted">(deleted)</span>{% endif %}</td>
+            <td class="mono">
+              {% if e.slicer %}
+                [{{ e.slicer.uplynk_account.label }}] {{ e.slicer.slicer_id }}
+              {% else %}
+                <span class="muted">(deleted)</span>
+              {% endif %}
+            </td>
+            <td class="mono">
+              {{ e.method }}
+              {% if e.dry_run %}<span class="badge">dry-run</span>{% endif %}
+            </td>
+            <td>
+              {% if e.status_code %}
+                <span class="badge {% if 200 <= e.status_code < 300 %}badge--active{% endif %}">{{ e.status_code }}</span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td class="mono audit-response">{{ e.response_snippet or '' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="card">
+      <p class="muted">No control events match those filters.</p>
+    </div>
+  {% endif %}
 {% endif %}
 {% endblock %}

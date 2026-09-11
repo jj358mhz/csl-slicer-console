@@ -475,3 +475,25 @@ form.inline { display: inline; margin: 0; }
 .checkbox-row:hover { background: rgba(255, 255, 255, .04); }
 .checkbox-row:has(input:checked) { border-color: var(--border-focus); background: var(--accent-bg); }
 .checkbox-row input { accent-color: var(--accent); margin: 0; }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+.tab {
+  padding: 10px 16px;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab:hover { color: var(--text-primary); }
+.tab--active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}

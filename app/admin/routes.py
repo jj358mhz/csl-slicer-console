@@ -5,6 +5,7 @@ from __future__ import annotations
 from flask import Blueprint, abort, flash, redirect, render_template, url_for
 from flask_login import current_user
 
+from app.admin.audit import log_admin_event
 from app.admin.decorators import admin_required
 from app.admin.forms import UplynkAccountForm, UserForm, UserSlicerAssignmentForm
 from app.auth.passwords import hash_password
@@ -81,6 +82,7 @@ def new_account():
             else:
                 db.session.add(acct)
                 db.session.commit()
+                log_admin_event("uplynk_account", "create", f"Created Uplynk account '{acct.label}'", target=acct.label)
                 flash(f"Uplynk account '{acct.label}' created.", "success")
                 return redirect(url_for("admin.list_accounts"))
     return render_template(
@@ -110,6 +112,7 @@ def edit_account(account_id: int):
             flash(err, "error")
         else:
             db.session.commit()
+            log_admin_event("uplynk_account", "update", f"Updated Uplynk account '{acct.label}'", target=acct.label)
             flash(f"Uplynk account '{acct.label}' updated.", "success")
             return redirect(url_for("admin.list_accounts"))
 
@@ -130,6 +133,7 @@ def delete_account(account_id: int):
     label = acct.label
     db.session.delete(acct)
     db.session.commit()
+    log_admin_event("uplynk_account", "delete", f"Deleted Uplynk account '{label}'", target=label)
     flash(f"Uplynk account '{label}' deleted.", "info")
     return redirect(url_for("admin.list_accounts"))
 
@@ -144,6 +148,15 @@ def sync_account_route(account_id: int):
         abort(404)
 
     result = sync_account(acct)
+
+    if result.error:
+        log_admin_event("sync", "error", f"Sync failed for '{acct.label}': {result.error}", target=acct.label)
+    else:
+        log_admin_event(
+            "sync", "run",
+            f"Synced '{acct.label}': {result.created} new, {result.updated} updated, {result.deactivated} deactivated",
+            target=acct.label,
+        )
 
     if result.error:
         flash(f"Sync failed for '{acct.label}': {result.error}", "error")
@@ -188,6 +201,7 @@ def new_user():
             )
             db.session.add(user)
             db.session.commit()
+            log_admin_event("user", "create", f"Created user '{user.email}'{' (admin)' if user.is_admin else ''}", target=user.email)
             flash(f"User '{user.email}' created.", "success")
             return redirect(url_for("admin.list_users"))
     return render_template("admin/user_form.html", form=form, mode="new")
@@ -224,6 +238,7 @@ def edit_user(user_id: int):
                 if form.password.data:
                     user.password_hash = hash_password(form.password.data)
                 db.session.commit()
+                log_admin_event("user", "update", f"Updated user '{user.email}'", target=user.email)
                 flash(f"User '{user.email}' updated.", "success")
                 return redirect(url_for("admin.list_users"))
 
@@ -242,6 +257,7 @@ def delete_user(user_id: int):
     email = user.email
     db.session.delete(user)
     db.session.commit()
+    log_admin_event("user", "delete", f"Deleted user '{email}'", target=email)
     flash(f"User '{email}' deleted.", "info")
     return redirect(url_for("admin.list_users"))
 
@@ -275,6 +291,11 @@ def assign_slicers(user_id: int):
         selected_ids = set(form.slicer_ids.data or [])
         user.slicers = [s for s in active_slicers if s.id in selected_ids]
         db.session.commit()
+        log_admin_event(
+            "user", "assign_slicers",
+            f"Assigned {len(user.slicers)} slicer(s) to '{user.email}'",
+            target=user.email,
+        )
         flash(
             f"Slicer assignments updated for '{user.email}' "
             f"({len(user.slicers)} assigned).",
@@ -300,9 +321,41 @@ def assign_slicers(user_id: int):
 def audit_log():
     from flask import request
 
-    from app.models import AuditEvent
+    from app.models import AdminEvent, AuditEvent
 
-    # Filters via query string
+    tab = request.args.get("tab", "control")
+
+    # For the filter dropdowns (shared across tabs)
+    all_users = db.session.query(User).order_by(User.email).all()
+    all_slicers = (
+        db.session.query(Slicer)
+        .join(UplynkAccount)
+        .order_by(UplynkAccount.label, Slicer.slicer_id)
+        .all()
+    )
+
+    if tab == "admin":
+        actor_id = request.args.get("actor_id", type=int)
+        category = request.args.get("category", "").strip() or None
+
+        query = db.session.query(AdminEvent).order_by(AdminEvent.timestamp.desc())
+        if actor_id:
+            query = query.filter(AdminEvent.actor_id == actor_id)
+        if category:
+            query = query.filter(AdminEvent.category == category)
+        admin_events = query.limit(500).all()
+
+        return render_template(
+            "admin/audit_log.html",
+            tab="admin",
+            admin_events=admin_events,
+            all_users=all_users,
+            all_slicers=all_slicers,
+            filters={"actor_id": actor_id, "category": category},
+            categories=["user", "uplynk_account", "slicer", "sync"],
+        )
+
+    # Default: slicer control tab
     user_id = request.args.get("user_id", type=int)
     slicer_id = request.args.get("slicer_id", type=int)
     method = request.args.get("method", "").strip() or None
@@ -314,21 +367,11 @@ def audit_log():
         query = query.filter(AuditEvent.slicer_id == slicer_id)
     if method:
         query = query.filter(AuditEvent.method == method)
-
-    # Cap at most-recent 500 to keep the page snappy
     events = query.limit(500).all()
-
-    # For the filter dropdowns
-    all_users = db.session.query(User).order_by(User.email).all()
-    all_slicers = (
-        db.session.query(Slicer)
-        .join(UplynkAccount)
-        .order_by(UplynkAccount.label, Slicer.slicer_id)
-        .all()
-    )
 
     return render_template(
         "admin/audit_log.html",
+        tab="control",
         events=events,
         all_users=all_users,
         all_slicers=all_slicers,
@@ -387,6 +430,11 @@ def new_slicer():
             )
             db.session.add(slicer)
             db.session.commit()
+            log_admin_event(
+                "slicer", "create",
+                f"Manually added slicer '{slicer.slicer_id}' under '{slicer.uplynk_account.label}'",
+                target=slicer.slicer_id,
+            )
             flash(f"Slicer '{slicer.slicer_id}' added.", "success")
             return redirect(url_for("admin.list_slicers"))
 
@@ -413,6 +461,7 @@ def edit_slicer(slicer_id_pk: int):
         slicer.region = form.region.data.strip() or None
         slicer.protocol = form.protocol.data.strip() or None
         db.session.commit()
+        log_admin_event("slicer", "update", f"Updated manual slicer '{slicer.slicer_id}'", target=slicer.slicer_id)
         flash(f"Slicer '{slicer.slicer_id}' updated.", "success")
         return redirect(url_for("admin.list_slicers"))
 
@@ -428,5 +477,6 @@ def delete_slicer(slicer_id_pk: int):
     name = slicer.slicer_id
     db.session.delete(slicer)
     db.session.commit()
+    log_admin_event("slicer", "delete", f"Deleted manual slicer '{name}'", target=name)
     flash(f"Slicer '{name}' deleted.", "info")
     return redirect(url_for("admin.list_slicers"))
