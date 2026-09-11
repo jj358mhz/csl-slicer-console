@@ -1,11 +1,20 @@
-"""Client for the Uplynk v4 API — slicer discovery."""
+"""Client for the Uplynk v4 API — slicer discovery.
+
+Uses Uplynk's Scoped API Key (XAuth) authentication: build an ES256-signed JWT
+per request from KID/SUB/PRIVATE_B64/SCP, send it in X-Auth-Uplynk-Jwt.
+See https://docs.uplynk.com/reference/scoped-api-keys.
+"""
 
 from __future__ import annotations
 
+import base64
+import time
 from dataclasses import dataclass
 from typing import Any
 
+import jwt
 import requests
+from cryptography.hazmat.primitives import serialization
 
 
 class UplynkAPIError(RuntimeError):
@@ -14,10 +23,7 @@ class UplynkAPIError(RuntimeError):
 
 @dataclass(frozen=True)
 class DiscoveredSlicer:
-    """A slicer as returned by the v4 list endpoint.
-
-    Only the fields we care about for storage; the raw response has more.
-    """
+    """A slicer as returned by the v4 list endpoint."""
 
     slicer_id: str
     slicer_api_url: str
@@ -44,10 +50,45 @@ class DiscoveredSlicer:
         )
 
 
+def build_jwt(
+    kid: str,
+    sub: str,
+    private_b64: str,
+    scp: str,
+    ttl_seconds: int = 300,
+) -> str:
+    """Build an ES256-signed JWT for Uplynk scoped-key auth.
+
+    - kid/sub/private_b64/scp come from the .env file downloaded from Uplynk.
+    - ttl_seconds sets the token lifetime (default 5 min per Uplynk docs).
+    """
+    try:
+        private_bytes = base64.b64decode(private_b64)
+    except (ValueError, TypeError) as e:
+        raise UplynkAPIError(f"Invalid PRIVATE_B64 (not valid base64): {e}") from e
+
+    try:
+        private_key = serialization.load_pem_private_key(private_bytes, password=None)
+    except Exception as e:
+        raise UplynkAPIError(f"Could not load private key: {e}") from e
+
+    now = int(time.time())
+    payload = {
+        "iat": now,
+        "exp": now + ttl_seconds,
+        "sub": sub,
+        "scp": [s.strip() for s in scp.split(",") if s.strip()],
+    }
+    headers = {"kid": kid, "typ": "JWT"}
+
+    return jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
+
+
 class UplynkDiscoveryClient:
     """Minimal client for GET /api/v4/ingest/cloud-slicers/live/slicers.
 
-    Uses Scoped API Key (Bearer) auth.
+    Uses Scoped API Key (XAuth/JWT) auth. Requires the
+    `video.services.ingest.cloudslicer.live:read` scope on the key.
     """
 
     LIST_ENDPOINT = "/api/v4/ingest/cloud-slicers/live/slicers"
@@ -55,20 +96,27 @@ class UplynkDiscoveryClient:
     def __init__(
         self,
         api_base: str,
-        scoped_api_key: str,
+        kid: str,
+        sub: str,
+        private_b64: str,
+        scp: str,
         timeout: int = 15,
         session: requests.Session | None = None,
     ) -> None:
         self.api_base = api_base.rstrip("/")
-        self.scoped_api_key = scoped_api_key
+        self.kid = kid
+        self.sub = sub
+        self.private_b64 = private_b64
+        self.scp = scp
         self.timeout = timeout
         self._session = session or requests.Session()
 
     def list_slicers(self) -> list[DiscoveredSlicer]:
         """Fetch and parse all live cloud slicers for this account."""
+        token = build_jwt(self.kid, self.sub, self.private_b64, self.scp)
         url = f"{self.api_base}{self.LIST_ENDPOINT}"
         headers = {
-            "Authorization": f"Bearer {self.scoped_api_key}",
+            "X-Auth-Uplynk-Jwt": token,
             "Accept": "application/json",
         }
 
@@ -78,15 +126,18 @@ class UplynkDiscoveryClient:
             raise UplynkAPIError(f"Request to Uplynk failed: {e}") from e
 
         if response.status_code == 401:
-            raise UplynkAPIError("Uplynk API rejected the scoped API key (401)")
+            raise UplynkAPIError(
+                "Uplynk API rejected the JWT (401) — check KID/SUB/PRIVATE_B64"
+            )
         if response.status_code == 403:
             raise UplynkAPIError(
-                "Scoped API key lacks required scope "
-                "(video.services.slicer.cloudslicer.live:read)"
+                "JWT lacks required scope "
+                "(video.services.ingest.cloudslicer.live:read)"
             )
         if response.status_code != 200:
             raise UplynkAPIError(
-                f"Uplynk API returned HTTP {response.status_code}: {response.text[:200]}"
+                f"Uplynk API returned HTTP {response.status_code}: "
+                f"{response.text[:200]}"
             )
 
         try:

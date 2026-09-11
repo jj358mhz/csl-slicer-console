@@ -67,10 +67,18 @@ class UplynkAccount(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     label: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
+
     # Legacy api_key used for CSL slicer control SHA1 signing
     legacy_api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
-    # Scoped v4 API key used for slicer discovery (Bearer auth). Optional.
-    scoped_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Scoped API Key (XAuth/JWT) — used for v4 API discovery.
+    # All four fields come from the .env file downloaded from the Uplynk CMS.
+    # Marked optional: an admin can skip this and just use manual slicer entry.
+    scoped_kid: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    scoped_sub: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    scoped_private_b64_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scoped_scp: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -81,6 +89,18 @@ class UplynkAccount(Base):
     slicers: Mapped[list["Slicer"]] = relationship(
         back_populates="uplynk_account", cascade="all, delete-orphan"
     )
+
+    @property
+    def has_scoped_key(self) -> bool:
+        """True if all four scoped-key fields are populated."""
+        return all(
+            [
+                self.scoped_kid,
+                self.scoped_sub,
+                self.scoped_private_b64_encrypted,
+                self.scoped_scp,
+            ]
+        )
 
     def __repr__(self) -> str:
         return f"<UplynkAccount {self.label}>"

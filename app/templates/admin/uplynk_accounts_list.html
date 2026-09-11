@@ -14,7 +14,7 @@
         <th>Label</th>
         <th>Workspace ID</th>
         <th>Legacy Key</th>
-        <th>Scoped Key</th>
+        <th>Scoped KID</th>
         <th>Last Synced</th>
         <th></th>
       </tr>
@@ -26,8 +26,8 @@
           <td class="mono">{{ acct.workspace_id }}</td>
           <td class="mono">{{ previews[acct.id].legacy }}</td>
           <td class="mono">
-            {% if previews[acct.id].scoped %}
-              {{ previews[acct.id].scoped }}
+            {% if previews[acct.id].scoped_kid %}
+              {{ previews[acct.id].scoped_kid }}
             {% else %}
               <span class="muted">— none —</span>
             {% endif %}
@@ -40,6 +40,15 @@
             {% endif %}
           </td>
           <td class="actions">
+            <form method="post"
+                  action="{{ url_for('admin.sync_account_route', account_id=acct.id) }}"
+                  class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="link-button"
+                      {% if not previews[acct.id].scoped_kid %}disabled title="Upload a scoped API key .env file to enable sync"{% endif %}>
+                Sync
+              </button>
+            </form>
             <a href="{{ url_for('admin.edit_account', account_id=acct.id) }}">Edit</a>
             <form method="post"
                   action="{{ url_for('admin.delete_account', account_id=acct.id) }}"

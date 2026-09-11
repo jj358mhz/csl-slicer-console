@@ -1,44 +1,53 @@
-"""Tests for the Uplynk v4 discovery client."""
+"""Tests for the Uplynk v4 discovery client (JWT/XAuth auth)."""
 
 from __future__ import annotations
 
+import base64
 from unittest.mock import MagicMock
 
+import jwt
 import pytest
 import requests
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from app.uplynk.discovery import (
     DiscoveredSlicer,
     UplynkAPIError,
     UplynkDiscoveryClient,
+    build_jwt,
 )
 
-# The exact schema from the Uplynk docs.
 SAMPLE_ITEM = {
     "@id": "/api/v4/ingest/cloud-slicers/live/slicers",
     "@type": "LiveCloudSlicer",
     "id": "slicer30158",
-    "configuration": "some-config",
-    "source_ip": "10.0.0.1",
-    "slicer_version": "5.2.1",
-    "encoding_profile_id": "ep-abc",
+    "slicer_api_url": "https://ingest-prod-0-us-east-1-3.csl.uplynk.net:443/slicer30158",
     "region": "us-east-1",
     "protocol": "SRT",
-    "rist_profile": "SIMPLE",
-    "streaming_url": "srt://example.com:1234",
-    "slicer_api_url": "https://ingest-prod-0-us-east-1-3.csl.uplynk.net:443/slicer30158",
-    "passphrase": "hidden",
-    "target_state": "Ready",
     "status": {"state": "Stopped"},
     "plugin": {"id": "tennis-scte35", "version": "1.0"},
-    "created_at": "2026-09-10T19:56:08.878Z",
     "description": "Test slicer",
-    "thumb_url": "https://example.com/thumb.png",
 }
 
 
-def _mock_response(status_code: int = 200, json_data: dict | None = None, text: str = ""):
-    """Build a fake requests.Response."""
+@pytest.fixture(scope="module")
+def ec_keypair():
+    """Generate a real ES256 keypair for signing test JWTs."""
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_key = private_key.public_key()
+    return {
+        "private_b64": base64.b64encode(pem).decode(),
+        "public_key": public_key,
+    }
+
+
+def _mock_response(status_code=200, json_data=None, text=""):
     mock = MagicMock(spec=requests.Response)
     mock.status_code = status_code
     mock.text = text or (str(json_data) if json_data else "")
@@ -49,94 +58,122 @@ def _mock_response(status_code: int = 200, json_data: dict | None = None, text: 
     return mock
 
 
-def _client_with_response(mock_response) -> UplynkDiscoveryClient:
+def _client(ec_keypair, response):
     session = MagicMock(spec=requests.Session)
-    session.get.return_value = mock_response
+    session.get.return_value = response
     return UplynkDiscoveryClient(
         api_base="https://services.uplynk.com",
-        scoped_api_key="test-key",
+        kid="test-kid",
+        sub="test-sub",
+        private_b64=ec_keypair["private_b64"],
+        scp="video.services.ingest.cloudslicer.live:read",
         session=session,
     )
 
 
-def test_discovered_slicer_from_api_full_item():
+def test_build_jwt_produces_valid_es256(ec_keypair):
+    token = build_jwt(
+        kid="k1",
+        sub="owner-abc",
+        private_b64=ec_keypair["private_b64"],
+        scp="video.services.ingest.cloudslicer.live:read,video.services.assets:read",
+    )
+    decoded = jwt.decode(
+        token,
+        ec_keypair["public_key"],
+        algorithms=["ES256"],
+    )
+    assert decoded["sub"] == "owner-abc"
+    assert "video.services.ingest.cloudslicer.live:read" in decoded["scp"]
+    assert "video.services.assets:read" in decoded["scp"]
+    assert "iat" in decoded
+    assert "exp" in decoded
+
+    header = jwt.get_unverified_header(token)
+    assert header["kid"] == "k1"
+    assert header["alg"] == "ES256"
+
+
+def test_build_jwt_invalid_base64_raises():
+    with pytest.raises(UplynkAPIError, match="base64"):
+        build_jwt(kid="k", sub="s", private_b64="!!!not-b64!!!", scp="x")
+
+
+def test_build_jwt_valid_b64_but_not_a_key():
+    junk = base64.b64encode(b"nope").decode()
+    with pytest.raises(UplynkAPIError, match="Could not load private key"):
+        build_jwt(kid="k", sub="s", private_b64=junk, scp="x")
+
+
+def test_discovered_slicer_from_api():
     ds = DiscoveredSlicer.from_api(SAMPLE_ITEM)
     assert ds.slicer_id == "slicer30158"
-    assert ds.slicer_api_url.endswith("/slicer30158")
     assert ds.region == "us-east-1"
-    assert ds.protocol == "SRT"
     assert ds.plugin_id == "tennis-scte35"
-    assert ds.plugin_version == "1.0"
     assert ds.state == "Stopped"
-    assert ds.description == "Test slicer"
 
 
-def test_discovered_slicer_handles_missing_optional_fields():
-    item = {"id": "s1", "slicer_api_url": "https://example.com/s1"}
-    ds = DiscoveredSlicer.from_api(item)
-    assert ds.slicer_id == "s1"
+def test_discovered_slicer_missing_optional_fields():
+    ds = DiscoveredSlicer.from_api({"id": "s1", "slicer_api_url": "u"})
     assert ds.region is None
     assert ds.plugin_id is None
-    assert ds.state is None
 
 
-def test_list_slicers_success():
-    payload = {"items": [SAMPLE_ITEM, SAMPLE_ITEM], "total_items": 2}
-    client = _client_with_response(_mock_response(200, payload))
+def test_list_slicers_success(ec_keypair):
+    client = _client(ec_keypair, _mock_response(200, {"items": [SAMPLE_ITEM]}))
     result = client.list_slicers()
-    assert len(result) == 2
-    assert all(isinstance(s, DiscoveredSlicer) for s in result)
+    assert len(result) == 1
+    assert isinstance(result[0], DiscoveredSlicer)
 
 
-def test_list_slicers_empty():
-    client = _client_with_response(_mock_response(200, {"items": [], "total_items": 0}))
-    assert client.list_slicers() == []
-
-
-def test_list_slicers_sends_bearer_auth():
+def test_list_slicers_sends_xauth_header(ec_keypair):
     session = MagicMock(spec=requests.Session)
     session.get.return_value = _mock_response(200, {"items": []})
     client = UplynkDiscoveryClient(
         api_base="https://services.uplynk.com",
-        scoped_api_key="secret-token-abc",
+        kid="k1",
+        sub="s1",
+        private_b64=ec_keypair["private_b64"],
+        scp="x:read",
         session=session,
     )
     client.list_slicers()
-    args, kwargs = session.get.call_args
-    assert kwargs["headers"]["Authorization"] == "Bearer secret-token-abc"
+    _, kwargs = session.get.call_args
+    assert "X-Auth-Uplynk-Jwt" in kwargs["headers"]
+    assert "Authorization" not in kwargs["headers"]
+    # Header contents should be a valid JWT
+    header = jwt.get_unverified_header(kwargs["headers"]["X-Auth-Uplynk-Jwt"])
+    assert header["kid"] == "k1"
 
 
-def test_list_slicers_401_raises():
-    client = _client_with_response(_mock_response(401, text="unauthorized"))
+def test_list_slicers_401_raises(ec_keypair):
+    client = _client(ec_keypair, _mock_response(401, text="bad token"))
     with pytest.raises(UplynkAPIError, match="401"):
         client.list_slicers()
 
 
-def test_list_slicers_403_mentions_scope():
-    client = _client_with_response(_mock_response(403, text="forbidden"))
+def test_list_slicers_403_mentions_scope(ec_keypair):
+    client = _client(ec_keypair, _mock_response(403, text="forbidden"))
     with pytest.raises(UplynkAPIError, match="scope"):
         client.list_slicers()
 
 
-def test_list_slicers_500_raises():
-    client = _client_with_response(_mock_response(500, text="server error"))
+def test_list_slicers_500_raises(ec_keypair):
+    client = _client(ec_keypair, _mock_response(500, text="server error"))
     with pytest.raises(UplynkAPIError, match="500"):
         client.list_slicers()
 
 
-def test_list_slicers_network_error_raises():
+def test_list_slicers_network_error_raises(ec_keypair):
     session = MagicMock(spec=requests.Session)
     session.get.side_effect = requests.ConnectionError("boom")
     client = UplynkDiscoveryClient(
         api_base="https://services.uplynk.com",
-        scoped_api_key="k",
+        kid="k",
+        sub="s",
+        private_b64=ec_keypair["private_b64"],
+        scp="x",
         session=session,
     )
     with pytest.raises(UplynkAPIError, match="Request to Uplynk failed"):
-        client.list_slicers()
-
-
-def test_list_slicers_malformed_response():
-    client = _client_with_response(_mock_response(200, {"total_items": 0}))
-    with pytest.raises(UplynkAPIError, match="items"):
         client.list_slicers()

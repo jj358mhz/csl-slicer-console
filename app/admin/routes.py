@@ -8,8 +8,28 @@ from app.admin.decorators import admin_required
 from app.admin.forms import UplynkAccountForm
 from app.crypto import decrypt, encrypt, mask
 from app.models import UplynkAccount, db
+from app.uplynk.scoped_env import ScopedEnvParseError, parse_scoped_env
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+
+def _apply_scoped_env(acct: UplynkAccount, file_storage) -> str | None:
+    """Read the uploaded .env file and populate the scoped-key fields.
+
+    Returns an error message string on failure, None on success.
+    Does nothing (returns None) if no file was uploaded.
+    """
+    if not file_storage or not file_storage.filename:
+        return None
+    try:
+        parsed = parse_scoped_env(file_storage.read())
+    except ScopedEnvParseError as e:
+        return f"Scoped API Key file is invalid: {e}"
+    acct.scoped_kid = parsed.kid
+    acct.scoped_sub = parsed.sub
+    acct.scoped_private_b64_encrypted = encrypt(parsed.private_b64)
+    acct.scoped_scp = parsed.scp
+    return None
 
 
 @bp.route("/uplynk-accounts")
@@ -20,20 +40,15 @@ def list_accounts():
         .order_by(UplynkAccount.label)
         .all()
     )
-    # Build a masked preview per account for display
     previews = {}
     for acct in accounts:
         try:
             previews[acct.id] = {
                 "legacy": mask(decrypt(acct.legacy_api_key_encrypted)),
-                "scoped": (
-                    mask(decrypt(acct.scoped_api_key_encrypted))
-                    if acct.scoped_api_key_encrypted
-                    else None
-                ),
+                "scoped_kid": acct.scoped_kid if acct.has_scoped_key else None,
             }
         except Exception:
-            previews[acct.id] = {"legacy": "(decrypt failed)", "scoped": None}
+            previews[acct.id] = {"legacy": "(decrypt failed)", "scoped_kid": None}
     return render_template(
         "admin/uplynk_accounts_list.html",
         accounts=accounts,
@@ -53,16 +68,15 @@ def new_account():
                 label=form.label.data.strip(),
                 workspace_id=form.workspace_id.data.strip(),
                 legacy_api_key_encrypted=encrypt(form.legacy_api_key.data),
-                scoped_api_key_encrypted=(
-                    encrypt(form.scoped_api_key.data)
-                    if form.scoped_api_key.data
-                    else None
-                ),
             )
-            db.session.add(acct)
-            db.session.commit()
-            flash(f"Uplynk account '{acct.label}' created.", "success")
-            return redirect(url_for("admin.list_accounts"))
+            err = _apply_scoped_env(acct, form.scoped_env_file.data)
+            if err:
+                flash(err, "error")
+            else:
+                db.session.add(acct)
+                db.session.commit()
+                flash(f"Uplynk account '{acct.label}' created.", "success")
+                return redirect(url_for("admin.list_accounts"))
     return render_template(
         "admin/uplynk_account_form.html",
         form=form,
@@ -78,20 +92,20 @@ def edit_account(account_id: int):
         abort(404)
 
     form = UplynkAccountForm(obj=acct)
-    # Never prefill password fields
-    form.legacy_api_key.data = ""
-    form.scoped_api_key.data = ""
+    form.legacy_api_key.data = ""  # never prefill secret fields
 
     if form.validate_on_submit():
         acct.label = form.label.data.strip()
         acct.workspace_id = form.workspace_id.data.strip()
         if form.legacy_api_key.data:
             acct.legacy_api_key_encrypted = encrypt(form.legacy_api_key.data)
-        if form.scoped_api_key.data:
-            acct.scoped_api_key_encrypted = encrypt(form.scoped_api_key.data)
-        db.session.commit()
-        flash(f"Uplynk account '{acct.label}' updated.", "success")
-        return redirect(url_for("admin.list_accounts"))
+        err = _apply_scoped_env(acct, form.scoped_env_file.data)
+        if err:
+            flash(err, "error")
+        else:
+            db.session.commit()
+            flash(f"Uplynk account '{acct.label}' updated.", "success")
+            return redirect(url_for("admin.list_accounts"))
 
     return render_template(
         "admin/uplynk_account_form.html",
@@ -111,4 +125,27 @@ def delete_account(account_id: int):
     db.session.delete(acct)
     db.session.commit()
     flash(f"Uplynk account '{label}' deleted.", "info")
+    return redirect(url_for("admin.list_accounts"))
+
+
+@bp.route("/uplynk-accounts/<int:account_id>/sync", methods=["POST"])
+@admin_required
+def sync_account_route(account_id: int):
+    from app.uplynk.sync import sync_account
+
+    acct = db.session.get(UplynkAccount, account_id)
+    if acct is None:
+        abort(404)
+
+    result = sync_account(acct)
+
+    if result.error:
+        flash(f"Sync failed for '{acct.label}': {result.error}", "error")
+    else:
+        flash(
+            f"Synced '{acct.label}': "
+            f"{result.created} new, {result.updated} updated, "
+            f"{result.deactivated} deactivated.",
+            "success",
+        )
     return redirect(url_for("admin.list_accounts"))

@@ -176,3 +176,5 @@ body {
 .site-header__link:hover { color: var(--text); }
 
 form.inline { display: inline; margin: 0; }
+
+.link-button:disabled { color: var(--text-muted); cursor: not-allowed; }

@@ -9,7 +9,7 @@
     {% if mode == 'new' %}Add Uplynk Account{% else %}Edit Uplynk Account{% endif %}
   </h1>
 
-  <form method="post" novalidate>
+  <form method="post" enctype="multipart/form-data" novalidate>
     {{ form.hidden_tag() }}
 
     <div class="field">
@@ -34,10 +34,16 @@
     </div>
 
     <div class="field">
-      {{ form.scoped_api_key.label }}
-      {{ form.scoped_api_key(class="input", placeholder=('optional' if mode == 'new' else '(unchanged)')) }}
-      {% if form.scoped_api_key.description %}<p class="field__help">{{ form.scoped_api_key.description }}</p>{% endif %}
-      {% for err in form.scoped_api_key.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+      {{ form.scoped_env_file.label }}
+      {{ form.scoped_env_file(class="input") }}
+      {% if form.scoped_env_file.description %}<p class="field__help">{{ form.scoped_env_file.description }}</p>{% endif %}
+      {% for err in form.scoped_env_file.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+      {% if mode == 'edit' and account.has_scoped_key %}
+        <p class="field__help">
+          Currently loaded — KID: <span class="mono">{{ account.scoped_kid }}</span>.
+          Upload a new file to replace it.
+        </p>
+      {% endif %}
     </div>
 
     <div class="form-actions">
