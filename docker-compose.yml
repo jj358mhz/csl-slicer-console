@@ -1,0 +1,29 @@
+services:
+  web:
+    image: ghcr.io/jj358mhz/csl-slicer-console:latest
+    container_name: csl-slicer-console
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-5000}:5000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY}
+      FERNET_KEY: ${FERNET_KEY}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/csl-slicer-console.db}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@example.com}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
+      UPLYNK_API_BASE: ${UPLYNK_API_BASE:-https://services.uplynk.com}
+      DISCOVERY_SYNC_INTERVAL: ${DISCOVERY_SYNC_INTERVAL:-15}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+    volumes:
+      - csl_slicer_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  csl_slicer_data:
+    name: csl_slicer_data
