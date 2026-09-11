@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}
+  {% if mode == 'new' %}Add Uplynk Account{% else %}Edit {{ account.label }}{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card card--narrow">
+  <h1>
+    {% if mode == 'new' %}Add Uplynk Account{% else %}Edit Uplynk Account{% endif %}
+  </h1>
+
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+
+    <div class="field">
+      {{ form.label.label }}
+      {{ form.label(class="input") }}
+      {% if form.label.description %}<p class="field__help">{{ form.label.description }}</p>{% endif %}
+      {% for err in form.label.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+    </div>
+
+    <div class="field">
+      {{ form.workspace_id.label }}
+      {{ form.workspace_id(class="input") }}
+      {% if form.workspace_id.description %}<p class="field__help">{{ form.workspace_id.description }}</p>{% endif %}
+      {% for err in form.workspace_id.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+    </div>
+
+    <div class="field">
+      {{ form.legacy_api_key.label }}
+      {{ form.legacy_api_key(class="input", placeholder=('required' if mode == 'new' else '(unchanged)')) }}
+      {% if form.legacy_api_key.description %}<p class="field__help">{{ form.legacy_api_key.description }}</p>{% endif %}
+      {% for err in form.legacy_api_key.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+    </div>
+
+    <div class="field">
+      {{ form.scoped_api_key.label }}
+      {{ form.scoped_api_key(class="input", placeholder=('optional' if mode == 'new' else '(unchanged)')) }}
+      {% if form.scoped_api_key.description %}<p class="field__help">{{ form.scoped_api_key.description }}</p>{% endif %}
+      {% for err in form.scoped_api_key.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+    </div>
+
+    <div class="form-actions">
+      {{ form.submit(class="button button--primary") }}
+      <a href="{{ url_for('admin.list_accounts') }}" class="button button--link">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Uplynk Accounts — Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Uplynk Accounts</h1>
+  <a href="{{ url_for('admin.new_account') }}" class="button button--primary">+ Add Account</a>
+</div>
+
+{% if accounts %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Label</th>
+        <th>Workspace ID</th>
+        <th>Legacy Key</th>
+        <th>Scoped Key</th>
+        <th>Last Synced</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for acct in accounts %}
+        <tr>
+          <td><strong>{{ acct.label }}</strong></td>
+          <td class="mono">{{ acct.workspace_id }}</td>
+          <td class="mono">{{ previews[acct.id].legacy }}</td>
+          <td class="mono">
+            {% if previews[acct.id].scoped %}
+              {{ previews[acct.id].scoped }}
+            {% else %}
+              <span class="muted">— none —</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if acct.last_synced_at %}
+              {{ acct.last_synced_at.strftime('%Y-%m-%d %H:%M') }}
+            {% else %}
+              <span class="muted">never</span>
+            {% endif %}
+          </td>
+          <td class="actions">
+            <a href="{{ url_for('admin.edit_account', account_id=acct.id) }}">Edit</a>
+            <form method="post"
+                  action="{{ url_for('admin.delete_account', account_id=acct.id) }}"
+                  class="inline"
+                  onsubmit="return confirm('Delete Uplynk account {{ acct.label }}? Slicers under this account will also be removed.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="link-button link-button--danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <div class="card">
+    <p class="muted">No Uplynk accounts yet. Add one to get started.</p>
+  </div>
+{% endif %}
+{% endblock %}

@@ -10,8 +10,11 @@
   <header class="site-header">
     <div class="site-header__inner">
       <a class="site-header__brand" href="{{ url_for('main.index') }}">CSL Slicer Console</a>
-      <nav class="site-header__nav">
+            <nav class="site-header__nav">
         {% if current_user.is_authenticated %}
+          {% if current_user.is_admin %}
+            <a href="{{ url_for('admin.list_accounts') }}" class="site-header__link">Uplynk Accounts</a>
+          {% endif %}
           <span class="site-header__user">{{ current_user.email }}</span>
           <form method="post" action="{{ url_for('auth.logout') }}" class="site-header__logout">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
