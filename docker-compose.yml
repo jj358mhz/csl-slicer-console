@@ -3,9 +3,8 @@ services:
     image: ghcr.io/jj358mhz/csl-slicer-console:latest
     container_name: csl-slicer-console
     restart: unless-stopped
-    ports:
-      # Bind to loopback only — Caddy on the host proxies public traffic in.
-      - "127.0.0.1:${WEB_PORT:-5051}:5000"
+    networks:
+      - caddy_public
     environment:
       SECRET_KEY: ${SECRET_KEY}
       FERNET_KEY: ${FERNET_KEY}
@@ -24,6 +23,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+networks:
+  caddy_public:
+    external: true
 
 volumes:
   csl_slicer_data:
