@@ -42,10 +42,6 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Version — passed in at build time from CI (git describe), defaults to "dev" locally
-ARG APP_VERSION=dev
-ENV APP_VERSION=${APP_VERSION}
-
 # Data dir for SQLite
 RUN mkdir -p /app/data && chown -R app:app /app/data
 
@@ -55,5 +51,9 @@ EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS http://localhost:5000/health || exit 1
+
+# Version — passed in at build time from CI (git describe), defaults to "dev" locally
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
 
 ENTRYPOINT ["/app/entrypoint.sh"]
