@@ -4,7 +4,9 @@
 {% block content %}
 <div class="page-header">
     <h1>Slicers</h1>
-    <div class="page-header__meta">
+    <div class="page-header__controls">
+        <button type="button" class="btn-ghost" id="collapse-all-btn">Collapse all</button>
+        <button type="button" class="btn-ghost" id="expand-all-btn">Expand all</button>
         <label class="checkbox-row" style="font-size: 13px;">
             <input type="checkbox" id="global-dry-run">
             Dry-run mode
@@ -13,16 +15,32 @@
 </div>
 
 {% if total %}
+<nav class="workspace-nav" id="workspace-nav" aria-label="Jump to workspace">
+    {% for account_label, group in groups %}
+    <a href="#section-{{ account_label }}"
+       class="workspace-nav__chip"
+       data-target="section-{{ account_label }}">
+        {{ account_label }}
+        <span class="workspace-nav__chip-count">({{ group|length }})</span>
+    </a>
+    {% endfor %}
+</nav>
 {% for account_label, group in groups %}
-<section class="account-section">
+<section class="account-section"
+         id="section-{{ account_label }}"
+         data-section="{{ account_label }}">
     <div class="account-section__header">
-        <h2 class="account-section__title">{{ account_label }}</h2>
+        <h2 class="account-section__title">
+            <span class="account-section__chevron" aria-hidden="true">▶</span>
+            {{ account_label }}
+            <span class="account-section__count">({{ group|length }})</span>
+        </h2>
         <label class="section-selectall">
             <input type="checkbox" class="section-selectall__cb" data-section="{{ account_label }}">
             <span>Select all</span>
         </label>
     </div>
-    <div class="slicer-grid">
+    <div class="account-section__body slicer-grid">
         {% for s in group %}
         <div class="slicer-card"
              id="slicer-{{ s.id }}"
@@ -181,6 +199,153 @@
                     updateBatchBar();
                 });
             });
+
+            // ---- Collapsible sections ----
+            const STORAGE_KEY = 'csl-console:collapsed-sections';
+            const NARROW_VIEWPORT = window.matchMedia('(max-width: 640px)');
+            const sections = document.querySelectorAll('.account-section');
+
+            function loadCollapsed() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    return new Set(raw ? JSON.parse(raw) : []);
+                } catch (_) {
+                    return new Set();
+                }
+            }
+
+            function saveCollapsed(set) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set)));
+                } catch (_) { /* quota / private mode — ignore */
+                }
+            }
+
+            function applyCollapsed() {
+                if (NARROW_VIEWPORT.matches) {
+                    // Force all open on narrow viewports
+                    sections.forEach(sec => sec.classList.remove('account-section--collapsed'));
+                    return;
+                }
+                const collapsed = loadCollapsed();
+                sections.forEach(sec => {
+                    const name = sec.dataset.section;
+                    if (collapsed.has(name)) {
+                        sec.classList.add('account-section--collapsed');
+                    } else {
+                        sec.classList.remove('account-section--collapsed');
+                    }
+                });
+            }
+
+            function toggleSection(sec) {
+                if (NARROW_VIEWPORT.matches) return;
+                const name = sec.dataset.section;
+                const collapsed = loadCollapsed();
+                if (sec.classList.toggle('account-section--collapsed')) {
+                    collapsed.add(name);
+                } else {
+                    collapsed.delete(name);
+                }
+                saveCollapsed(collapsed);
+            }
+
+            // Header click toggles, but clicks on the Select-all label don't.
+            sections.forEach(sec => {
+                const header = sec.querySelector('.account-section__header');
+                if (!header) return;
+                header.addEventListener('click', function (e) {
+                    if (e.target.closest('.section-selectall')) return;
+                    toggleSection(sec);
+                });
+            });
+
+            // Collapse all / Expand all
+            const collapseAllBtn = document.getElementById('collapse-all-btn');
+            const expandAllBtn = document.getElementById('expand-all-btn');
+
+            if (collapseAllBtn) {
+                collapseAllBtn.addEventListener('click', function () {
+                    if (NARROW_VIEWPORT.matches) return;
+                    const collapsed = new Set();
+                    sections.forEach(sec => {
+                        sec.classList.add('account-section--collapsed');
+                        collapsed.add(sec.dataset.section);
+                    });
+                    saveCollapsed(collapsed);
+                });
+            }
+
+            if (expandAllBtn) {
+                expandAllBtn.addEventListener('click', function () {
+                    sections.forEach(sec => sec.classList.remove('account-section--collapsed'));
+                    saveCollapsed(new Set());
+                });
+            }
+
+            // Re-apply when the viewport crosses the breakpoint (e.g. rotating a tablet)
+            NARROW_VIEWPORT.addEventListener('change', applyCollapsed);
+
+            // Initial paint
+            applyCollapsed();
+
+            // ---- Workspace chip nav (smooth-scroll + scrollspy) ----
+            const chips = document.querySelectorAll('.workspace-nav__chip');
+
+            if (chips.length && sections.length) {
+                // Smooth-scroll on click
+                chips.forEach(chip => {
+                    chip.addEventListener('click', function (e) {
+                        const targetId = chip.dataset.target;
+                        const target = document.getElementById(targetId);
+                        if (!target) return;
+                        e.preventDefault();
+                        target.scrollIntoView({behavior: 'smooth', block: 'start'});
+                    });
+                });
+
+                // Highlight the chip for the section currently in view
+                function setActiveChip(sectionName) {
+                    chips.forEach(chip => {
+                        const isActive = chip.dataset.target === `section-${sectionName}`;
+                        chip.classList.toggle('workspace-nav__chip--active', isActive);
+                    });
+                }
+
+                // Track which sections are intersecting; pick the topmost one
+                const visible = new Map();
+                const observer = new IntersectionObserver(function (entries) {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            visible.set(entry.target.dataset.section, entry.boundingClientRect.top);
+                        } else {
+                            visible.delete(entry.target.dataset.section);
+                        }
+                    });
+                    if (visible.size === 0) return;
+                    // Pick the section closest to the top of the viewport
+                    let topmost = null;
+                    let topmostY = Infinity;
+                    visible.forEach((y, name) => {
+                        if (y < topmostY) {
+                            topmostY = y;
+                            topmost = name;
+                        }
+                    });
+                    if (topmost) setActiveChip(topmost);
+                }, {
+                    // Trigger when a section's top crosses ~20% down from the viewport top.
+                    // Bottom margin -60% means we don't count sections still near the bottom.
+                    rootMargin: '-20% 0px -60% 0px',
+                    threshold: 0,
+                });
+
+                sections.forEach(sec => observer.observe(sec));
+
+                // Set an initial active chip based on which section is nearest the top
+                const firstSection = sections[0];
+                if (firstSection) setActiveChip(firstSection.dataset.section);
+            }
 
             clearBtn.addEventListener('click', function () {
                 document.querySelectorAll('.slicer-checkbox:checked').forEach(cb => {

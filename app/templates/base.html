@@ -19,7 +19,14 @@
 <body>
 <header class="site-header">
     <div class="site-header__inner">
-        <a class="site-header__brand" href="{{ url_for('main.index') }}">CSL Slicer Console</a>
+        <div class="site-header__brand-group">
+            <a class="site-header__brand" href="{{ url_for('main.index') }}">CSL Slicer Console</a>
+            <a class="site-header__version"
+               href="https://github.com/jj358mhz/csl-slicer-console/releases"
+               target="_blank"
+               rel="noopener noreferrer"
+               title="View releases on GitHub">{{ app_version }}</a>
+        </div>
         <nav class="site-header__nav">
             {% if current_user.is_authenticated %}
             <a href="{{ url_for('main.index') }}" class="site-header__link">Dashboard</a>

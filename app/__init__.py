@@ -13,6 +13,8 @@ from app.bootstrap import bootstrap_admin
 from app.config import Config
 from app.models import User, db
 
+APP_VERSION = os.getenv("APP_VERSION", "dev")
+
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
 login_manager.login_message = "Please sign in to access that page."
@@ -48,6 +50,11 @@ def create_app(config: Config | None = None) -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(slicers_bp)
+
+    # Expose app version to all templates
+    @app.context_processor
+    def inject_version() -> dict:
+        return {"app_version": APP_VERSION}
 
     # First-run bootstrap (idempotent — skips if users already exist)
     bootstrap_admin(app)

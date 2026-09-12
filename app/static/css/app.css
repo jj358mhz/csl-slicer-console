@@ -698,3 +698,168 @@ form.inline { display: inline; margin: 0; }
 .modal__title { margin: 0 0 8px; font-size: 18px; color: var(--text-primary); }
 .modal__body  { margin: 0 0 20px; color: var(--text-muted); font-size: 13.5px; line-height: 1.5; }
 .modal__actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+
+/* ==========================================================================
+   19 · Dashboard nav & collapsible sections
+   ========================================================================== */
+
+/* --- section header: chevron + count -------------------------------------- */
+
+.account-section__header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.account-section__chevron {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-right: 0.5rem;
+  color: var(--text-muted, #9aa0a6);
+  font-size: 0.7rem;
+  line-height: 1;
+  transition: transform 200ms ease-out;
+  transform: rotate(90deg); /* ▼ expanded */
+  flex-shrink: 0;
+}
+
+.account-section--collapsed .account-section__chevron {
+  transform: rotate(0deg); /* ▶ collapsed */
+}
+
+.account-section__count {
+  margin-left: 0.4rem;
+  font-weight: 400;
+  color: var(--text-muted, #9aa0a6);
+  font-size: 0.9em;
+}
+
+/* Keep "Select all" clickable without toggling the section */
+.account-section__header .section-selectall {
+  margin-left: auto;
+}
+
+/* --- collapsible grid ----------------------------------------------------- */
+
+.account-section__body {
+  overflow: hidden;
+  max-height: 20000px; /* effectively "auto" for the transition */
+  transition: max-height 200ms ease-out;
+}
+
+.account-section--collapsed .account-section__body {
+  max-height: 0;
+}
+
+/* --- header controls (collapse/expand all) -------------------------------- */
+
+.page-header__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border, #2a2a2a);
+  color: var(--text, #e8e8e8);
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.btn-ghost:hover {
+  background: var(--surface-2, #1a1a1a);
+  border-color: var(--accent, #ec1e79);
+}
+
+/* --- workspace nav chips -------------------------------------------------- */
+
+.workspace-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0;
+  margin-bottom: 1rem;
+  background: var(--surface-0, #0d0d0d);
+  border-bottom: 1px solid var(--border, #2a2a2a);
+}
+
+.workspace-nav__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  background: var(--surface-2, #1a1a1a);
+  color: var(--text, #e8e8e8);
+  font-size: 0.85rem;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  cursor: pointer;
+}
+.workspace-nav__chip:hover {
+  border-color: var(--accent, #ec1e79);
+}
+.workspace-nav__chip--active {
+  background: var(--accent, #ec1e79);
+  color: #fff;
+  border-color: var(--accent, #ec1e79);
+}
+.workspace-nav__chip-count {
+  opacity: 0.75;
+  font-size: 0.8em;
+}
+
+/* --- narrow viewport: hide chip nav, force sections open ------------------ */
+
+@media (max-width: 640px) {
+  .workspace-nav {
+    display: none;
+  }
+  .account-section--collapsed .account-section__body {
+    max-height: 20000px; /* JS also skips toggling, this is the belt-and-braces */
+  }
+  .account-section--collapsed .account-section__chevron {
+    transform: rotate(90deg);
+  }
+}
+
+/* ==========================================================================
+   20. Version badge
+   ========================================================================== */
+
+.site-header__brand-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.site-header__version {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(236, 30, 121, 0.12);
+    color: var(--accent, #ec1e79);
+    font-size: 11px;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-weight: 500;
+    text-decoration: none;
+    line-height: 1.4;
+    border: 1px solid rgba(236, 30, 121, 0.25);
+    transition: background 120ms ease, border-color 120ms ease;
+    white-space: nowrap;
+}
+
+.site-header__version:hover {
+    background: rgba(236, 30, 121, 0.22);
+    border-color: var(--accent, #ec1e79);
+    text-decoration: none;
+}

@@ -16,6 +16,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
     image: csl-slicer-console:latest
     container_name: csl-slicer-console
     pull_policy: never
@@ -30,6 +32,7 @@ services:
       - DISCOVERY_SYNC_INTERVAL=${DISCOVERY_SYNC_INTERVAL:-15}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-3}
+      - APP_VERSION=${APP_VERSION:-dev}
     restart: unless-stopped
     expose:
       - "5000"

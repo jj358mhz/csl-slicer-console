@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-09-11
+
+### Added
+
+**Dashboard navigation**
+- 📁 **Collapsible workspace sections** — click a section header to collapse or expand its slicer grid. Chevron rotates, cards slide with a 200ms max-height transition. Collapsed state persists in `localStorage` per workspace username.
+- 🔢 **Slicer counts** — each section header shows the number of slicers in that workspace, e.g. `EVERPASS (12)`.
+- 🧭 **Workspace chip nav** — sticky chip row under the page header for jumping between workspaces. Click a chip to smooth-scroll to that section; the active chip highlights automatically as you scroll (IntersectionObserver-driven). Hides on narrow viewports.
+- ⏬ **Collapse all / Expand all** — buttons in the page header alongside the Dry-run toggle. Bulk-toggle every section at once, state syncs to storage.
+- ✅ **Batch-safe collapse** — batch bar count still reflects checked slicers inside collapsed sections. Section-level "Select all" works without expanding the section.
+- 📱 **Narrow-viewport safety** — under 640px, chip nav hides and sections force open so the dashboard stays usable on mobile.
+
+**Version transparency**
+- 🏷️ **Live version badge** — magenta pill in the top nav shows the deployed version (from `git describe --tags --always --dirty`), links to the GitHub releases page. Reads from the `APP_VERSION` env var baked in at Docker build time by the deploy workflow; falls back to `dev` locally.
+
+### Changed
+
+- 🎨 CSS reorganized: new section `19. Dashboard nav & collapsible sections` and `20. Version badge` appended at the end of `app.css`.
+- 🚢 Deploy workflow now injects the git-described version as a Docker build arg on every push.
+
+---
+
 ## [1.0.1] — 2026-09-12
 
 ### Added

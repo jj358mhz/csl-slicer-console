@@ -14,61 +14,63 @@ control buttons, and full audit trails.
   slicers; regular users see only the slicers assigned to them.
 - 🏢 **Uplynk account management** — admins register workspaces with two
   credential types, stored **Fernet-encrypted** at rest:
-  - **Legacy API key** — CSL slicer control (SHA1-signed requests)
-  - **Scoped API Key** *(optional)* — upload the `.env` file from Uplynk's
-    Scoped API Keys page. Used for v4 API discovery via ES256-signed JWTs
-    sent in `X-Auth-Uplynk-Jwt`.
+    - **Legacy API key** — CSL slicer control (SHA1-signed requests)
+    - **Scoped API Key** *(optional)* — upload the `.env` file from Uplynk's
+      Scoped API Keys page. Used for v4 API discovery via ES256-signed JWTs
+      sent in `X-Auth-Uplynk-Jwt`.
 - 🔍 **Auto-discovery + fallback** — one-click Sync populates slicers from
   `/api/v4/ingest/cloud-slicers/live/slicers`. Manual slicer CRUD available
   for accounts without a scoped key.
 - 🎛️ **HTMX dashboard** — slicers grouped by workspace with live state
   pills (Slicing / AdBreak / Blackout / Stopped). Four action buttons per
-  card, inline JSON results, no page reload.
+  card, inline JSON results, no page reload. **Collapsible workspace
+  sections** with per-workspace persistence, sticky chip nav for jumping
+  between workspaces, and slicer counts per section.
 - ✅ **Batch operations** — checkbox per card, section select-all, floating
   action bar, parallel fire against selected slicers, confirmation modal
   for destructive multi-slicer actions.
 - 🧪 **Dry-run mode** — dashboard toggle skips the real API call but writes
   an audit event so you can rehearse safely.
 - 📜 **Two audit trails** —
-  - *Slicer Control*: every `/blackout`, `/content_start`, `/state`,
-    `/status` attempt with actor, status code, and response snippet.
-  - *Admin Activity*: every user CRUD, account CRUD, slicer CRUD, and sync
-    event.
+    - *Slicer Control*: every `/blackout`, `/content_start`, `/state`,
+      `/status` attempt with actor, status code, and response snippet.
+    - *Admin Activity*: every user CRUD, account CRUD, slicer CRUD, and sync
+      event.
 - 🎨 **Uplynk-inspired UI** — dark near-black surfaces, magenta (`#ec1e79`)
   accent, semantic state colors. Design language shared with
   `scte-plugin-generator` for a unified Utility Pi look.
 
 ## 🚀 Live Deployment
 
-Deployed on the homelab Utility Pi and fronted by Caddy at
-**[csl.telcomjj.com](https://csl.telcomjj.com)** *(LAN only)*.
+Deployed on the homelab Utility Pi and fronted by Caddy at **[csl.telcomjj.com](https://csl.telcomjj.com)** *(LAN
+only)*.
 
 ## 🏗️ Architecture
 
-| Layer | Tech |
-|---|---|
-| Web framework | Flask 3 + Jinja2 |
-| ORM & migrations | SQLAlchemy 2 + Alembic |
-| Auth | Flask-Login + Flask-WTF (CSRF) + argon2 |
-| Database | SQLite (single-file, volume-mounted) |
-| Frontend | Server-rendered HTML + HTMX (no build step) |
-| Crypto | `cryptography` (Fernet at rest, ES256 JWT for Uplynk v4) |
-| WSGI server | gunicorn |
-| Runtime | Python 3.12 in a slim Debian container |
-| Package manager | [uv](https://docs.astral.sh/uv/) |
-| Reverse proxy | Caddy (in the homelab-utility stack) with Cloudflare TLS |
-| Orchestration | Portainer-managed Docker Compose stack |
+| Layer            | Tech                                                     |
+|------------------|----------------------------------------------------------|
+| Web framework    | Flask 3 + Jinja2                                         |
+| ORM & migrations | SQLAlchemy 2 + Alembic                                   |
+| Auth             | Flask-Login + Flask-WTF (CSRF) + argon2                  |
+| Database         | SQLite (single-file, volume-mounted)                     |
+| Frontend         | Server-rendered HTML + HTMX (no build step)              |
+| Crypto           | `cryptography` (Fernet at rest, ES256 JWT for Uplynk v4) |
+| WSGI server      | gunicorn                                                 |
+| Runtime          | Python 3.12 in a slim Debian container                   |
+| Package manager  | [uv](https://docs.astral.sh/uv/)                         |
+| Reverse proxy    | Caddy (in the homelab-utility stack) with Cloudflare TLS |
+| Orchestration    | Portainer-managed Docker Compose stack                   |
 
 ## 🗂️ Data model
 
-| Table | Purpose |
-|---|---|
-| `users` | Login accounts (admin flag, active flag) |
-| `uplynk_accounts` | Workspaces + encrypted credentials |
-| `slicers` | Discovered or manually-added slicers |
-| `user_slicers` | Many-to-many: which users control which slicers |
-| `audit_events` | Slicer control history (per-user history + admin filters) |
-| `admin_events` | User / account / slicer CRUD + sync events |
+| Table             | Purpose                                                   |
+|-------------------|-----------------------------------------------------------|
+| `users`           | Login accounts (admin flag, active flag)                  |
+| `uplynk_accounts` | Workspaces + encrypted credentials                        |
+| `slicers`         | Discovered or manually-added slicers                      |
+| `user_slicers`    | Many-to-many: which users control which slicers           |
+| `audit_events`    | Slicer control history (per-user history + admin filters) |
+| `admin_events`    | User / account / slicer CRUD + sync events                |
 
 ## 🧑‍💻 Local development
 
@@ -118,18 +120,19 @@ Runs as a Portainer-managed stack pulling directly from this repo:
 
 ### Environment variables
 
-Set via Portainer's **Advanced mode** env editor (Stack → Editor → Environment variables). Stored in Portainer, never committed to Git.
+Set via Portainer's **Advanced mode** env editor (Stack → Editor → Environment variables). Stored in Portainer, never
+committed to Git.
 
-| Variable | Purpose |
-|---|---|
-| `SECRET_KEY` | Signs Flask session cookies |
-| `FERNET_KEY` | Encrypts Uplynk API keys at rest |
-| `BOOTSTRAP_ADMIN_EMAIL` | First-run admin login |
-| `BOOTSTRAP_ADMIN_PASSWORD` | First-run admin password |
-| `LOG_LEVEL` | `info` / `debug` / `warning` |
-| `GUNICORN_WORKERS` | Worker count (default 3) |
-| `UPLYNK_API_BASE` | Uplynk v4 API base (default `https://services.uplynk.com`) |
-| `DISCOVERY_SYNC_INTERVAL` | Auto-sync interval in minutes (0 = disabled) |
+| Variable                   | Purpose                                                    |
+|----------------------------|------------------------------------------------------------|
+| `SECRET_KEY`               | Signs Flask session cookies                                |
+| `FERNET_KEY`               | Encrypts Uplynk API keys at rest                           |
+| `BOOTSTRAP_ADMIN_EMAIL`    | First-run admin login                                      |
+| `BOOTSTRAP_ADMIN_PASSWORD` | First-run admin password                                   |
+| `LOG_LEVEL`                | `info` / `debug` / `warning`                               |
+| `GUNICORN_WORKERS`         | Worker count (default 3)                                   |
+| `UPLYNK_API_BASE`          | Uplynk v4 API base (default `https://services.uplynk.com`) |
+| `DISCOVERY_SYNC_INTERVAL`  | Auto-sync interval in minutes (0 = disabled)               |
 
 Bootstrap only runs when the `users` table is empty; subsequent env-var
 changes to `BOOTSTRAP_ADMIN_*` are ignored. Reset an admin password
@@ -169,6 +172,10 @@ GitHub Actions runs on every push:
 - **`.github/workflows/deploy.yml`** — on push to `main`, SSHes into the
   Utility Pi, `git pull`, `docker compose up -d --build`, and prunes stale
   images. Portainer also polls the repo and keeps its managed copy in sync.
+- **Version badge** — the deploy workflow injects `git describe --tags
+  --always --dirty` as a Docker build arg (`APP_VERSION`), surfaced as a
+  magenta pill in the top nav so you can see at a glance which release
+  (or unreleased main commit) is running.
 
 Secrets required for `deploy.yml`: `DEPLOY_HOST`, `DEPLOY_USER`,
 `DEPLOY_SSH_KEY` (dedicated deploy keypair, `authorized_keys` entry on the Pi).

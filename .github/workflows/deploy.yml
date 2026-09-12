@@ -30,6 +30,8 @@ jobs:
             set -e
             cd ~/git/csl-slicer-console
             git pull origin main
-            docker compose up -d --build
+            export APP_VERSION="$(git describe --tags --always --dirty)"
+            echo "Building version: $APP_VERSION"
+            APP_VERSION="$APP_VERSION" docker compose up -d --build
             docker image prune -a -f --filter "label=app=csl-slicer-console" --filter "until=24h"
-            echo "Deploy complete: $(git rev-parse --short HEAD)"
+            echo "Deploy complete: $(git rev-parse --short HEAD) as $APP_VERSION"
