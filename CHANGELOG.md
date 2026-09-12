@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-09-11
+
+### Fixed
+
+- 🧭 Workspace chip nav now updates the active chip immediately on click, so short/collapsed dashboards give visual feedback even when there's no scroll to perform.
+- 📏 Sections scroll to just under the sticky chip nav (via `scroll-margin-top`) instead of hiding behind it.
+- 🚢 Deploy workflow now pulls tags before running `git describe`, so the version badge reflects the tagged release instead of falling back to the short SHA.
+- 🐳 Dockerfile `ARG APP_VERSION` moved to the end of the runtime stage so cache invalidates only on that final layer when the version changes, instead of silently reusing a cached `dev` value.
+
+---
+
 ## [1.1.0] — 2026-09-11
 
 ### Added

@@ -863,3 +863,7 @@ form.inline { display: inline; margin: 0; }
     border-color: var(--accent, #ec1e79);
     text-decoration: none;
 }
+
+.account-section {
+    scroll-margin-top: 4rem;
+}
