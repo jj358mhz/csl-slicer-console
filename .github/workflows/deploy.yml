@@ -1,0 +1,35 @@
+# =============================================================================
+# Deploy to Utility Pi
+# =============================================================================
+# Triggered on every push to main.
+# SSHes into the Utility Pi, pulls the latest commit, rebuilds and restarts
+# the csl-slicer-console Docker container.
+
+name: Deploy to Utility Pi
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: SSH deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 2222
+          script: |
+            set -e
+            cd ~/git/csl-slicer-console
+            git pull origin main
+            docker compose up -d --build
+            docker image prune -a -f --filter "label=app=csl-slicer-console" --filter "until=24h"
+            echo "Deploy complete: $(git rev-parse --short HEAD)"

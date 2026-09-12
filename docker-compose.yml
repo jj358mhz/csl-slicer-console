@@ -1,20 +1,40 @@
+# =============================================================================
+# csl-slicer-console — Portainer-managed stack
+# =============================================================================
+# Deployed from GitHub via SSH → git pull → docker compose up --build on the
+# Utility Pi. Fronted by Caddy at csl.telcomjj.com — see the caddy/Caddyfile
+# in homelab-utility for the reverse-proxy snippet.
+#
+# Networking:
+#   - Container exposes port 5000 on the internal `web` network only.
+#   - No `ports:` publish — Caddy reaches it by service name on the shared
+#     network. Prevents accidental public exposure if Caddy is misconfigured.
+# -----------------------------------------------------------------------------
+
 services:
-  web:
-    image: ghcr.io/jj358mhz/csl-slicer-console:latest
+  csl-slicer-console:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: csl-slicer-console:latest
     container_name: csl-slicer-console
-    restart: unless-stopped
-    networks:
-      - auth-net
+    pull_policy: never
     environment:
-      SECRET_KEY: ${SECRET_KEY}
-      FERNET_KEY: ${FERNET_KEY}
-      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/csl-slicer-console.db}
-      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@example.com}
-      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
-      UPLYNK_API_BASE: ${UPLYNK_API_BASE:-https://services.uplynk.com}
-      DISCOVERY_SYNC_INTERVAL: ${DISCOVERY_SYNC_INTERVAL:-15}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      - TZ=America/Los_Angeles
+      - SECRET_KEY=${SECRET_KEY}
+      - FERNET_KEY=${FERNET_KEY}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/csl-slicer-console.db}
+      - BOOTSTRAP_ADMIN_EMAIL=${BOOTSTRAP_ADMIN_EMAIL:-admin@example.com}
+      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD}
+      - UPLYNK_API_BASE=${UPLYNK_API_BASE:-https://services.uplynk.com}
+      - DISCOVERY_SYNC_INTERVAL=${DISCOVERY_SYNC_INTERVAL:-15}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-3}
+    restart: unless-stopped
+    expose:
+      - "5000"
+    networks:
+      - web
     volumes:
       - csl_slicer_data:/app/data
     healthcheck:
@@ -23,10 +43,18 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    labels:
+      - "app=csl-slicer-console"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
-  auth-net:
+  web:
     external: true
+    name: auth-net
 
 volumes:
   csl_slicer_data:
