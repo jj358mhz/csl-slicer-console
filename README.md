@@ -1,6 +1,6 @@
 # 📺 csl-slicer-console
 
-[![Release](https://img.shields.io/github/v/release/jj358mhz/scte-plugin-generator?label=release&color=ec1e79)](https://github.com/jj358mhz/scte-plugin-generator/releases/latest)
+[![Release](https://img.shields.io/github/v/release/jj358mhz/csl-slicer-console?label=release&color=ec1e79)](https://github.com/jj358mhz/csl-slicer-console/releases/latest)
 
 Multi-user web console for controlling Uplynk CSL ingest slicers. Replaces
 the single-user Python CLI with a browser-based, multi-tenant admin surface —
