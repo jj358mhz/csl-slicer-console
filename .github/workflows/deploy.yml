@@ -29,6 +29,7 @@ jobs:
           script: |
             set -e
             cd ~/git/csl-slicer-console
+            git fetch --tags --force
             git pull origin main
             export APP_VERSION="$(git describe --tags --always --dirty)"
             echo "Building version: $APP_VERSION"
