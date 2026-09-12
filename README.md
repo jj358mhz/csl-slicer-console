@@ -24,3 +24,5 @@ GHCR by GitHub Actions on push to `main`.
 ## License
 
 MIT
+
+Deployed at csl.telcomjj.com
