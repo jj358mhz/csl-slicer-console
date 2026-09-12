@@ -455,6 +455,22 @@
                     fireBatch(btn.dataset.batchMethod);
                 });
             });
+
+            // ---- Copy JSON to clipboard ----
+            document.body.addEventListener('click', async function (e) {
+                const btn = e.target.closest('.result__copy');
+                if (!btn) return;
+                const wrap = btn.closest('.result__body-wrap');
+                const pre = wrap && wrap.querySelector('.result__body');
+                if (!pre) return;
+                try {
+                    await navigator.clipboard.writeText(pre.textContent);
+                    btn.classList.add('result__copy--copied');
+                    setTimeout(() => btn.classList.remove('result__copy--copied'), 1500);
+                } catch (err) {
+                    console.error('Copy failed:', err);
+                }
+            });
         });
     })();
 </script>

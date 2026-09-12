@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-09-11
+
+### Added
+
+- 📋 **Copy JSON button** — hovering a slicer result block reveals a copy icon in the top-right corner. Click to copy the raw JSON body to the clipboard; a green "Copied" flash confirms. Only shows when the response is structured JSON (skipped for plain-text and errors).
+
+---
+
 ## [1.1.1] — 2026-09-11
 
 ### Fixed

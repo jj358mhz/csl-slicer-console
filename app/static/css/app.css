@@ -867,3 +867,60 @@ form.inline { display: inline; margin: 0; }
 .account-section {
     scroll-margin-top: 4rem;
 }
+
+/* ==========================================================================
+   21. Result copy button
+   ========================================================================== */
+
+.result__body-wrap {
+    position: relative;
+}
+
+.result__copy {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: var(--text-muted, #9aa0a6);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.result__body-wrap:hover .result__copy,
+.result__copy:focus-visible {
+    opacity: 1;
+}
+
+.result__copy:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text, #e8e8e8);
+}
+
+.result__copy--copied {
+    opacity: 1 !important;
+    background: rgba(30, 200, 120, 0.12);
+    border-color: rgba(30, 200, 120, 0.4);
+    color: #4ade80;
+}
+
+.result__copy--copied::after {
+    content: "Copied";
+    position: absolute;
+    right: calc(100% + 6px);
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    font-family: var(--font-sans, system-ui);
+    color: #4ade80;
+    white-space: nowrap;
+}
