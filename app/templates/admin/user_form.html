@@ -1,42 +1,40 @@
 {% extends "base.html" %}
-{% block title %}
-  {% if mode == 'new' %}Add User{% else %}Edit {{ user.email }}{% endif %}
-{% endblock %}
+{% block title_suffix %}{% if mode == 'new' %} — Add User{% else %} — Edit {{ user.email }}{% endif %}{% endblock %}
 
 {% block content %}
 <div class="card card--narrow">
-  <h1>{% if mode == 'new' %}Add User{% else %}Edit User{% endif %}</h1>
+    <h1>{% if mode == 'new' %}Add User{% else %}Edit User{% endif %}</h1>
 
-  <form method="post" novalidate>
-    {{ form.hidden_tag() }}
+    <form method="post" novalidate>
+        {{ form.hidden_tag() }}
 
-    <div class="field">
-      {{ form.email.label }}
-      {{ form.email(class="input") }}
-      {% for err in form.email.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
-    </div>
+        <div class="field">
+            {{ form.email.label }}
+            {{ form.email(class="input") }}
+            {% for err in form.email.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+        </div>
 
-    <div class="field">
-      {{ form.password.label }}
-      {{ form.password(class="input", placeholder=('required' if mode == 'new' else '(unchanged)')) }}
-      {% if form.password.description %}<p class="field__help">{{ form.password.description }}</p>{% endif %}
-      {% for err in form.password.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
-    </div>
+        <div class="field">
+            {{ form.password.label }}
+            {{ form.password(class="input", placeholder=('required' if mode == 'new' else '(unchanged)')) }}
+            {% if form.password.description %}<p class="field__help">{{ form.password.description }}</p>{% endif %}
+            {% for err in form.password.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
+        </div>
 
-    <div class="field field--inline">
-      {{ form.is_admin() }}
-      {{ form.is_admin.label }}
-    </div>
+        <div class="field field--inline">
+            {{ form.is_admin() }}
+            {{ form.is_admin.label }}
+        </div>
 
-    <div class="field field--inline">
-      {{ form.is_active() }}
-      {{ form.is_active.label }}
-    </div>
+        <div class="field field--inline">
+            {{ form.is_active() }}
+            {{ form.is_active.label }}
+        </div>
 
-    <div class="form-actions">
-      {{ form.submit(class="button button--primary") }}
-      <a href="{{ url_for('admin.list_users') }}" class="button button--link">Cancel</a>
-    </div>
-  </form>
+        <div class="form-actions">
+            {{ form.submit(class="button button--primary") }}
+            <a href="{{ url_for('admin.list_users') }}" class="button button--link">Cancel</a>
+        </div>
+    </form>
 </div>
 {% endblock %}
