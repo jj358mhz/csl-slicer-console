@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- 📱 **Mobile section collapse** — tapping section headers on iOS/mobile now toggles collapse as it does on desktop. v1.1.0 disabled this under 640px on the assumption phones needed a simpler view; that assumption was wrong. Fixes [#4](https://github.com/jj358mhz/csl-slicer-console/issues/4).
+- 🧭 **Mobile workspace chip nav** — chip nav now renders on narrow viewports with horizontal scroll, instead of being hidden. Jump-to-workspace is most useful on the smallest screens. Section headers also get a 44px minimum tap target (Apple HIG). Fixes [#5](https://github.com/jj358mhz/csl-slicer-console/issues/5).
+
 ## [1.2.0] — 2026-09-11
 
 ### Added

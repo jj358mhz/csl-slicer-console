@@ -1,5 +1,5 @@
 services:
-  web:
+  csl-slicer-console:
     image: !reset null
     build:
       context: .
