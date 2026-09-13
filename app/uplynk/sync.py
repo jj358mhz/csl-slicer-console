@@ -98,6 +98,7 @@ def _apply_sync(
                     protocol=ds.protocol,
                     plugin_id=ds.plugin_id,
                     plugin_version=ds.plugin_version,
+                    connection_mode=ds.connection_mode,
                     last_state=ds.state,
                     description=ds.description,
                     is_active=True,
@@ -111,6 +112,7 @@ def _apply_sync(
             current.protocol = ds.protocol
             current.plugin_id = ds.plugin_id
             current.plugin_version = ds.plugin_version
+            current.connection_mode = ds.connection_mode
             current.last_state = ds.state
             current.description = ds.description
             current.is_active = True

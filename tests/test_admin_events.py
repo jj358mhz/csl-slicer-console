@@ -97,19 +97,20 @@ def test_sync_success_logs_event(app, client):
         acct_id = acct.id
 
     with patch(
-        "app.uplynk.sync.UplynkDiscoveryClient.list_slicers",
-        return_value=[
-            DiscoveredSlicer(
-                slicer_id="s1",
-                slicer_api_url="https://example.com/s1",
-                region=None,
-                protocol=None,
-                plugin_id=None,
-                plugin_version=None,
-                state=None,
-                description=None,
-            )
-        ],
+            "app.uplynk.sync.UplynkDiscoveryClient.list_slicers",
+            return_value=[
+                DiscoveredSlicer(
+                    slicer_id="s1",
+                    slicer_api_url="https://example.com/s1",
+                    region=None,
+                    protocol=None,
+                    plugin_id=None,
+                    plugin_version=None,
+                    state=None,
+                    description=None,
+                    connection_mode=None,
+                )
+            ],
     ):
         client.post(f"/admin/uplynk-accounts/{acct_id}/sync", follow_redirects=True)
 

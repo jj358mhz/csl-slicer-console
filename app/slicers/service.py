@@ -9,6 +9,7 @@ from flask import current_app
 from app.crypto import decrypt
 from app.models import AuditEvent, Slicer, User, db
 from app.uplynk.csl import SLICER_METHODS, CSLError, CSLResult, call_slicer
+from app.uplynk.discovery import UplynkAPIError, UplynkDiscoveryClient
 
 
 class SlicerAccessDenied(RuntimeError):
@@ -35,6 +36,11 @@ def _user_can_control(user: User, slicer: Slicer) -> bool:
     if user.is_admin:
         return True
     return any(s.id == slicer.id for s in user.slicers)
+
+
+def user_can_control(user: User, slicer: Slicer) -> bool:
+    """Public wrapper — same policy as _user_can_control, exported for routes."""
+    return _user_can_control(user, slicer)
 
 
 def control_slicer(
@@ -134,3 +140,44 @@ def _record_and_return(
     db.session.commit()
 
     return ControlOutcome(result=result, error=error, audit_event_id=event.id)
+
+
+def poll_slicer_state(user: User, slicer: Slicer) -> Slicer:
+    """Fetch the slicer's current state from Uplynk and persist it.
+
+    Uses the v4 retrieve endpoint (scoped-key JWT auth, orthogonal to the
+    SHA1-signed control endpoints). Updates last_state, connection_mode, and
+    last_seen_at on the row, commits, and returns the refreshed Slicer.
+
+    Raises SlicerAccessDenied if the user isn't permitted to view this slicer.
+    Raises UplynkAPIError on Uplynk-side failures — caller decides how to render.
+    """
+    if not _user_can_control(user, slicer):
+        raise SlicerAccessDenied(
+            f"User {user.email} is not assigned to slicer {slicer.slicer_id}"
+        )
+
+    account = slicer.uplynk_account
+    if not account.has_scoped_key:
+        raise UplynkAPIError(
+            f"Account {account.label!r} has no scoped API key — cannot poll state"
+        )
+
+    private_b64 = decrypt(account.scoped_private_b64_encrypted)
+    client = UplynkDiscoveryClient(
+        api_base=current_app.config["UPLYNK_API_BASE"],
+        kid=account.scoped_kid,
+        sub=account.scoped_sub,
+        private_b64=private_b64,
+        scp=account.scoped_scp,
+    )
+
+    fresh = client.retrieve_slicer(slicer.slicer_id)
+
+    from datetime import UTC, datetime
+
+    slicer.last_state = fresh.state
+    slicer.connection_mode = fresh.connection_mode
+    slicer.last_seen_at = datetime.now(UTC)
+    db.session.commit()
+    return slicer

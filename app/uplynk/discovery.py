@@ -23,7 +23,7 @@ class UplynkAPIError(RuntimeError):
 
 @dataclass(frozen=True)
 class DiscoveredSlicer:
-    """A slicer as returned by the v4 list endpoint."""
+    """A slicer as returned by the v4 list/retrieve endpoints."""
 
     slicer_id: str
     slicer_api_url: str
@@ -33,6 +33,7 @@ class DiscoveredSlicer:
     plugin_version: str | None
     state: str | None
     description: str | None
+    connection_mode: str | None  # "push" | "pull" | None. Only meaningful for SRT.
 
     @classmethod
     def from_api(cls, item: dict[str, Any]) -> DiscoveredSlicer:
@@ -47,6 +48,7 @@ class DiscoveredSlicer:
             plugin_version=plugin.get("version"),
             state=status.get("state"),
             description=item.get("description"),
+            connection_mode=item.get("connection_mode"),
         )
 
 
@@ -92,6 +94,7 @@ class UplynkDiscoveryClient:
     """
 
     LIST_ENDPOINT = "/api/v4/ingest/cloud-slicers/live/slicers"
+    RETRIEVE_ENDPOINT = "/api/v4/ingest/cloud-slicers/live/slicers/{slicer_id}"
 
     def __init__(
         self,
@@ -149,3 +152,43 @@ class UplynkDiscoveryClient:
             return [DiscoveredSlicer.from_api(item) for item in items]
         except KeyError as e:
             raise UplynkAPIError(f"Uplynk API item missing required field: {e}") from e
+
+    def retrieve_slicer(self, slicer_id: str) -> DiscoveredSlicer:
+        """Fetch and parse a single live cloud slicer's current state.
+
+        Uses the v4 retrieve endpoint. Same auth as `list_slicers`.
+        """
+        token = build_jwt(self.kid, self.sub, self.private_b64, self.scp)
+        url = f"{self.api_base}{self.RETRIEVE_ENDPOINT.format(slicer_id=slicer_id)}"
+        headers = {
+            "X-Auth-Uplynk-Jwt": token,
+            "Accept": "application/json",
+        }
+
+        try:
+            response = self._session.get(url, headers=headers, timeout=self.timeout)
+        except requests.RequestException as e:
+            raise UplynkAPIError(f"Request to Uplynk failed: {e}") from e
+
+        if response.status_code == 401:
+            raise UplynkAPIError("Uplynk API rejected the JWT (401) — check KID/SUB/PRIVATE_B64")
+        if response.status_code == 403:
+            raise UplynkAPIError(
+                "JWT lacks required scope (video.services.slicer.cloudslicer.live:read)"
+            )
+        if response.status_code == 404:
+            raise UplynkAPIError(f"Slicer {slicer_id!r} not found")
+        if response.status_code != 200:
+            raise UplynkAPIError(
+                f"Uplynk API returned HTTP {response.status_code}: {response.text[:200]}"
+            )
+
+        try:
+            payload = response.json()
+        except ValueError as e:
+            raise UplynkAPIError("Uplynk API returned non-JSON response") from e
+
+        try:
+            return DiscoveredSlicer.from_api(payload)
+        except KeyError as e:
+            raise UplynkAPIError(f"Uplynk API response missing required field: {e}") from e
