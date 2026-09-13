@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-09-12
+
+### Added
+
+- 🔄 **Auto-polling state badges** — slicer state badges refresh every 30s via HTMX polling on `GET /slicers/<id>/state`. No page reload, no new JS. Falls through to the last-known state on transient Uplynk errors rather than 500ing. Closes [#2](https://github.com/jj358mhz/csl-slicer-console/issues/2).
+- 🛰️ **SRT push/pull qualifier** — tile meta line now reads `us-east-1 · SRT pull` (or `push`) instead of just `SRT`. Populated at sync time from the v4 API's `connection_mode` field. Closes [#3](https://github.com/jj358mhz/csl-slicer-console/issues/3).
+- 🔌 New `retrieve_slicer()` on the v4 discovery client and `poll_slicer_state()` service (access-checked, same policy as `control_slicer`).
+- 🗄️ New `connection_mode` column on `slicers` (Alembic migration `5ca8377f1cb7`).
+
 ## [1.2.1] — 2026-09-12
 
 ### Fixed
