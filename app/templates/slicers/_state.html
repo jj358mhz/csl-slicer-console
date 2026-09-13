@@ -1,0 +1,6 @@
+{# Polling response: replaces the badge (via outerHTML swap on #badge-<id>)
+   and updates the meta line via hx-swap-oob. #}
+{% include 'slicers/_badge.html' %}
+<div id="meta-{{ s.id }}" class="slicer-card__meta" hx-swap-oob="true">
+    {% include 'slicers/_meta.html' %}
+</div>

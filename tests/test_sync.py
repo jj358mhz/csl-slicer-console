@@ -29,7 +29,7 @@ def _mk_account(app, *, with_scoped_key: bool = True):
         return acct.id
 
 
-def _mk_discovered(slicer_id="s1", state="Stopped", url=None):
+def _mk_discovered(slicer_id="s1", state="Stopped", url=None, connection_mode="pull"):
     return DiscoveredSlicer(
         slicer_id=slicer_id,
         slicer_api_url=url or f"https://ingest.example.com/{slicer_id}",
@@ -39,6 +39,7 @@ def _mk_discovered(slicer_id="s1", state="Stopped", url=None):
         plugin_version="1.0",
         state=state,
         description=None,
+        connection_mode=connection_mode,
     )
 
 
@@ -139,3 +140,45 @@ def test_sync_updates_last_synced_at(app):
             sync_account(acct)
         db.session.refresh(acct)
         assert acct.last_synced_at is not None
+
+
+def test_sync_captures_connection_mode(app):
+    acct_id = _mk_account(app)
+    with app.app_context():
+        acct = db.session.get(UplynkAccount, acct_id)
+        with patch(
+            "app.uplynk.sync.UplynkDiscoveryClient.list_slicers",
+            return_value=[
+                _mk_discovered("srt_push", connection_mode="push"),
+                _mk_discovered("srt_pull", connection_mode="pull"),
+                _mk_discovered("rtmp_none", connection_mode=None),
+            ],
+        ):
+            sync_account(acct)
+
+        rows = {s.slicer_id: s for s in db.session.query(Slicer).all()}
+        assert rows["srt_push"].connection_mode == "push"
+        assert rows["srt_pull"].connection_mode == "pull"
+        assert rows["rtmp_none"].connection_mode is None
+
+
+def test_sync_updates_connection_mode_on_change(app):
+    """If Uplynk reports a different mode, sync captures the change."""
+    acct_id = _mk_account(app)
+    with app.app_context():
+        acct = db.session.get(UplynkAccount, acct_id)
+
+        with patch(
+            "app.uplynk.sync.UplynkDiscoveryClient.list_slicers",
+            return_value=[_mk_discovered("s1", connection_mode="pull")],
+        ):
+            sync_account(acct)
+
+        with patch(
+            "app.uplynk.sync.UplynkDiscoveryClient.list_slicers",
+            return_value=[_mk_discovered("s1", connection_mode="push")],
+        ):
+            sync_account(acct)
+
+        slicer = db.session.query(Slicer).filter_by(slicer_id="s1").one()
+        assert slicer.connection_mode == "push"

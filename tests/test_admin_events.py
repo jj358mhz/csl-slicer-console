@@ -108,6 +108,7 @@ def test_sync_success_logs_event(app, client):
                 plugin_version=None,
                 state=None,
                 description=None,
+                connection_mode=None,
             )
         ],
     ):

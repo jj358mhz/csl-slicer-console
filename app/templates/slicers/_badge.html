@@ -1,0 +1,7 @@
+{# Slicer state badge. Polled every 30s via HTMX; also included at page load. #}
+{% set state_slug = (s.last_state or 'unknown') | lower | replace(' ', '') %}
+<span id="badge-{{ s.id }}"
+      class="badge badge--state badge--state--{{ state_slug }}"
+      hx-get="{{ url_for('slicers.state', slicer_id=s.id) }}"
+      hx-trigger="every 30s"
+      hx-swap="outerHTML">{{ s.last_state or 'unknown' }}</span>

@@ -1,0 +1,6 @@
+{# Slicer meta line: region · protocol (with SRT push/pull qualifier). #}
+{%- set proto = s.protocol or '—' -%}
+{%- if s.protocol == 'SRT' and s.connection_mode -%}
+    {%- set proto = 'SRT ' ~ s.connection_mode -%}
+{%- endif -%}
+{{ s.region or '—' }} · {{ proto }}

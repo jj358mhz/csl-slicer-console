@@ -53,12 +53,11 @@
                                 </label>
                                 <div class="slicer-card__title">
                                     <div class="slicer-card__name">{{ s.slicer_id }}</div>
-                                    <div class="slicer-card__meta">
-                                        {{ s.region or '—' }} · {{ s.protocol or '—' }}
+                                    <div class="slicer-card__meta" id="meta-{{ s.id }}">
+                                        {% include 'slicers/_meta.html' %}
                                     </div>
                                 </div>
-                                {% set state_slug = (s.last_state or 'unknown') | lower | replace(' ', '') %}
-                                <span class="badge badge--state badge--state--{{ state_slug }}">{{ s.last_state or 'unknown' }}</span>
+                                {% include 'slicers/_badge.html' %}
                             </div>
 
                             <div class="slicer-card__actions">

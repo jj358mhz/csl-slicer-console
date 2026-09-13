@@ -25,6 +25,7 @@ SAMPLE_ITEM = {
     "slicer_api_url": "https://ingest-prod-0-us-east-1-3.csl.uplynk.net:443/slicer30158",
     "region": "us-east-1",
     "protocol": "SRT",
+    "connection_mode": "pull",
     "status": {"state": "Stopped"},
     "plugin": {"id": "tennis-scte35", "version": "1.0"},
     "description": "Test slicer",
@@ -111,6 +112,15 @@ def test_discovered_slicer_from_api():
     assert ds.region == "us-east-1"
     assert ds.plugin_id == "tennis-scte35"
     assert ds.state == "Stopped"
+    assert ds.connection_mode == "pull"
+
+
+def test_discovered_slicer_connection_mode_absent_when_not_srt():
+    item = {**SAMPLE_ITEM, "protocol": "RTMP"}
+    del item["connection_mode"]
+    ds = DiscoveredSlicer.from_api(item)
+    assert ds.protocol == "RTMP"
+    assert ds.connection_mode is None
 
 
 def test_discovered_slicer_missing_optional_fields():
@@ -177,3 +187,75 @@ def test_list_slicers_network_error_raises(ec_keypair):
     )
     with pytest.raises(UplynkAPIError, match="Request to Uplynk failed"):
         client.list_slicers()
+
+
+def test_retrieve_slicer_success(ec_keypair):
+    client = _client(ec_keypair, _mock_response(200, SAMPLE_ITEM))
+    result = client.retrieve_slicer("slicer30158")
+    assert isinstance(result, DiscoveredSlicer)
+    assert result.slicer_id == "slicer30158"
+    assert result.state == "Stopped"
+    assert result.connection_mode == "pull"
+
+
+def test_retrieve_slicer_hits_correct_url(ec_keypair):
+    session = MagicMock(spec=requests.Session)
+    session.get.return_value = _mock_response(200, SAMPLE_ITEM)
+    client = UplynkDiscoveryClient(
+        api_base="https://services.uplynk.com",
+        kid="k1",
+        sub="s1",
+        private_b64=ec_keypair["private_b64"],
+        scp="x:read",
+        session=session,
+    )
+    client.retrieve_slicer("my-slicer")
+    args, _ = session.get.call_args
+    assert args[0] == (
+        "https://services.uplynk.com/api/v4/ingest/cloud-slicers/live/slicers/my-slicer"
+    )
+
+
+def test_retrieve_slicer_401_raises(ec_keypair):
+    client = _client(ec_keypair, _mock_response(401, text="bad token"))
+    with pytest.raises(UplynkAPIError, match="401"):
+        client.retrieve_slicer("s1")
+
+
+def test_retrieve_slicer_403_mentions_scope(ec_keypair):
+    client = _client(ec_keypair, _mock_response(403, text="forbidden"))
+    with pytest.raises(UplynkAPIError, match="scope"):
+        client.retrieve_slicer("s1")
+
+
+def test_retrieve_slicer_404_names_slicer(ec_keypair):
+    client = _client(ec_keypair, _mock_response(404, text="not found"))
+    with pytest.raises(UplynkAPIError, match="ghost-slicer"):
+        client.retrieve_slicer("ghost-slicer")
+
+
+def test_retrieve_slicer_malformed_json_raises(ec_keypair):
+    client = _client(ec_keypair, _mock_response(200, json_data=None, text="not json"))
+    with pytest.raises(UplynkAPIError, match="non-JSON"):
+        client.retrieve_slicer("s1")
+
+
+def test_retrieve_slicer_missing_required_field_raises(ec_keypair):
+    client = _client(ec_keypair, _mock_response(200, {"protocol": "SRT"}))
+    with pytest.raises(UplynkAPIError, match="missing required field"):
+        client.retrieve_slicer("s1")
+
+
+def test_retrieve_slicer_network_error_raises(ec_keypair):
+    session = MagicMock(spec=requests.Session)
+    session.get.side_effect = requests.ConnectionError("boom")
+    client = UplynkDiscoveryClient(
+        api_base="https://services.uplynk.com",
+        kid="k",
+        sub="s",
+        private_b64=ec_keypair["private_b64"],
+        scp="x",
+        session=session,
+    )
+    with pytest.raises(UplynkAPIError, match="Request to Uplynk failed"):
+        client.retrieve_slicer("s1")
