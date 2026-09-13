@@ -1,0 +1,51 @@
+{#
+  Renders the scopes granted to a stored scoped Uplynk API key.
+  Usage:
+    {% include "admin/_scopes.html" with context %}
+  Expects `account` in context (an UplynkAccount).
+
+  Scope names taken from cms.uplynk.com scope picker (Ingest family).
+#}
+{% set scope_descriptions = {
+  "video.services.ingest.slicer:read":
+      "Read ingest slicer configuration.",
+  "video.services.ingest.slicer:write":
+      "Modify ingest slicer configuration.",
+  "video.services.ingest.slicer.cloudslicer.live:read":
+      "Read CSL (Cloud Slicer Live) slicer state and metadata.",
+  "video.services.ingest.slicer.cloudslicer.live:write":
+      "Control CSL slicers (start, stop, cue, mark ad).",
+  "video.services.ingest.slicer.cloudslicer.vod:read":
+      "Read Cloud Slicer VOD configuration.",
+  "video.services.ingest.slicer.cloudslicer.vod:write":
+      "Modify Cloud Slicer VOD configuration.",
+  "video.services.ingest.smartplay.live:read":
+      "Read SmartPlay live ingest configuration.",
+  "video.services.ingest.smartplay.live:write":
+      "Modify SmartPlay live ingest configuration.",
+  "video.services.ingest.smartplay.vod:read":
+      "Read SmartPlay VOD ingest configuration.",
+  "video.services.ingest.smartplay.vod:write":
+      "Modify SmartPlay VOD ingest configuration.",
+} %}
+
+<div class="scopes" data-testid="scoped-key-scopes">
+    <p class="scopes__label">Scoped API Key permissions</p>
+  {% if account.scoped_scp %}
+    <ul class="scopes__list">
+      {% for scope in account.scoped_scp.split(',') %}
+        {% set scope = scope.strip() %}
+        {% if scope %}
+          <li>
+            <span class="badge badge--scope"
+                  {% if scope in scope_descriptions %}title="{{ scope_descriptions[scope] }}"{% endif %}>
+              {{ scope }}
+            </span>
+          </li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No scoped key configured — upload a file above to add one.</p>
+  {% endif %}
+</div>
