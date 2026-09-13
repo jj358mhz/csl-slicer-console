@@ -1,12 +1,11 @@
 services:
   csl-slicer-console:
-    image: !reset null
     build:
       context: .
       dockerfile: Dockerfile
+    image: csl-slicer-console:dev
     ports:
       - "${WEB_PORT:-5050}:5000"
-    networks: !reset []
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"
@@ -17,4 +16,8 @@ services:
     entrypoint: []
     command: ["flask", "--app", "app", "run", "--host=0.0.0.0", "--port=5000", "--debug"]
 
-networks: !reset {}
+networks:
+  web:
+    external: false
+    driver: bridge
+    name: csl-slicer-console_web
