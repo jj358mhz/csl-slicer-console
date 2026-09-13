@@ -153,15 +153,11 @@ def poll_slicer_state(user: User, slicer: Slicer) -> Slicer:
     Raises UplynkAPIError on Uplynk-side failures — caller decides how to render.
     """
     if not _user_can_control(user, slicer):
-        raise SlicerAccessDenied(
-            f"User {user.email} is not assigned to slicer {slicer.slicer_id}"
-        )
+        raise SlicerAccessDenied(f"User {user.email} is not assigned to slicer {slicer.slicer_id}")
 
     account = slicer.uplynk_account
     if not account.has_scoped_key:
-        raise UplynkAPIError(
-            f"Account {account.label!r} has no scoped API key — cannot poll state"
-        )
+        raise UplynkAPIError(f"Account {account.label!r} has no scoped API key — cannot poll state")
 
     private_b64 = decrypt(account.scoped_private_b64_encrypted)
     client = UplynkDiscoveryClient(

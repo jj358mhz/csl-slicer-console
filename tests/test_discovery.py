@@ -212,8 +212,7 @@ def test_retrieve_slicer_hits_correct_url(ec_keypair):
     client.retrieve_slicer("my-slicer")
     args, _ = session.get.call_args
     assert args[0] == (
-        "https://services.uplynk.com"
-        "/api/v4/ingest/cloud-slicers/live/slicers/my-slicer"
+        "https://services.uplynk.com/api/v4/ingest/cloud-slicers/live/slicers/my-slicer"
     )
 
 
