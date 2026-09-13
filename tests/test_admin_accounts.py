@@ -209,3 +209,142 @@ def test_admin_deletes_account(app, client):
     )
     with app.app_context():
         assert db.session.get(UplynkAccount, acct_id) is None
+
+
+# ---------------------------------------------------------------------------
+# Scoped API Key permissions display (issue #14)
+# ---------------------------------------------------------------------------
+
+
+def test_edit_page_renders_scope_badges(app, client):
+    """The edit page renders each stored scope as its own badge."""
+    _login(client)
+    client.post(
+        "/admin/uplynk-accounts/new",
+        data={
+            "label": "ScopedAcct",
+            "workspace_id": "ws-1",
+            "legacy_api_key": "legacy-key",
+            "scoped_env_file": (
+                io.BytesIO(
+                    _scoped_env_bytes(
+                        scp=(
+                            "video.services.ingest.slicer.cloudslicer.live:read,"
+                            "video.services.ingest.slicer.cloudslicer.live:write"
+                        )
+                    )
+                ),
+                "key.env",
+            ),
+            "submit": "Save",
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    with app.app_context():
+        acct_id = db.session.query(UplynkAccount).filter_by(label="ScopedAcct").one().id
+
+    response = client.get(f"/admin/uplynk-accounts/{acct_id}/edit")
+    assert response.status_code == 200
+    body = response.data.decode()
+    assert 'data-testid="scoped-key-scopes"' in body
+    assert "video.services.ingest.slicer.cloudslicer.live:read" in body
+    assert "video.services.ingest.slicer.cloudslicer.live:write" in body
+    # Both scopes should be inside individual badge elements
+    assert body.count('class="badge badge--scope"') == 2
+
+
+def test_edit_page_shows_empty_state_when_no_scoped_key(app, client):
+    """An account with no scoped key shows the empty-state message."""
+    _login(client)
+    client.post(
+        "/admin/uplynk-accounts/new",
+        data={
+            "label": "NoScope",
+            "workspace_id": "ws-1",
+            "legacy_api_key": "legacy-only",
+            "submit": "Save",
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    with app.app_context():
+        acct_id = db.session.query(UplynkAccount).filter_by(label="NoScope").one().id
+
+    response = client.get(f"/admin/uplynk-accounts/{acct_id}/edit")
+    assert response.status_code == 200
+    body = response.data.decode()
+    assert 'data-testid="scoped-key-scopes"' in body
+    assert "No scoped key configured" in body
+    assert 'class="badge badge--scope"' not in body
+
+
+def test_known_scope_has_tooltip(app, client):
+    """A scope in the description map gets a title attribute; unknown scopes don't."""
+    _login(client)
+    client.post(
+        "/admin/uplynk-accounts/new",
+        data={
+            "label": "TooltipAcct",
+            "workspace_id": "ws-1",
+            "legacy_api_key": "legacy-key",
+            "scoped_env_file": (
+                io.BytesIO(
+                    _scoped_env_bytes(
+                        scp=(
+                            "video.services.ingest.slicer.cloudslicer.live:read,"
+                            "video.services.unknown.made.up:read"
+                        )
+                    )
+                ),
+                "key.env",
+            ),
+            "submit": "Save",
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    with app.app_context():
+        acct_id = db.session.query(UplynkAccount).filter_by(label="TooltipAcct").one().id
+
+    response = client.get(f"/admin/uplynk-accounts/{acct_id}/edit")
+    body = response.data.decode()
+    # Known scope has a tooltip
+    assert 'title="Read CSL (Cloud Slicer Live) slicer state and metadata."' in body
+    # Unknown scope is still rendered but without a title attribute
+    assert "video.services.unknown.made.up:read" in body
+
+
+def test_scope_list_ignores_whitespace_and_empty_entries(app, client):
+    """Malformed scope strings (extra commas, whitespace) don't produce empty badges."""
+    _login(client)
+    client.post(
+        "/admin/uplynk-accounts/new",
+        data={
+            "label": "MessyAcct",
+            "workspace_id": "ws-1",
+            "legacy_api_key": "legacy-key",
+            "scoped_env_file": (
+                io.BytesIO(
+                    _scoped_env_bytes(
+                        scp=(
+                            " video.services.ingest.slicer.cloudslicer.live:read ,,"
+                            " video.services.ingest.slicer.cloudslicer.live:write "
+                        )
+                    )
+                ),
+                "messy.env",
+            ),
+            "submit": "Save",
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    with app.app_context():
+        acct_id = db.session.query(UplynkAccount).filter_by(label="MessyAcct").one().id
+
+    response = client.get(f"/admin/uplynk-accounts/{acct_id}/edit")
+    body = response.data.decode()
+    # Exactly two badges rendered — the empty entry between the commas is skipped
+    assert body.count('class="badge badge--scope"') == 2
+
