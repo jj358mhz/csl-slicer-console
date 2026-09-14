@@ -76,9 +76,7 @@ def test_url_composition_uses_slicer_id(ec_keypair):
     session.patch.return_value = _mock_response(
         status_code=200, json_data={"target_state": "Ready"}
     )
-    set_slicer_target_state(
-        **_valid_kwargs(ec_keypair, slicer_id="up_west_pa1"), session=session
-    )
+    set_slicer_target_state(**_valid_kwargs(ec_keypair, slicer_id="up_west_pa1"), session=session)
     call_url = session.patch.call_args.args[0]
     assert call_url == (
         "https://services.uplynk.com/api/v4/ingest/cloud-slicers/live/slicers/up_west_pa1"
@@ -90,9 +88,7 @@ def test_patch_body_carries_target_state(ec_keypair):
     session.patch.return_value = _mock_response(
         status_code=200, json_data={"target_state": "Stopped"}
     )
-    set_slicer_target_state(
-        **_valid_kwargs(ec_keypair, target_state="Stopped"), session=session
-    )
+    set_slicer_target_state(**_valid_kwargs(ec_keypair, target_state="Stopped"), session=session)
     body = session.patch.call_args.kwargs["json"]
     assert body == {"target_state": "Stopped"}
 
