@@ -1255,3 +1255,31 @@ form.inline {
     font-weight: 500;
     cursor: help;   /* hints at the tooltip */
 }
+
+/* ==========================================================================
+   23. Start / Stop action buttons (v4 target_state)
+   ========================================================================== */
+
+/* Start — green, non-destructive. Same treatment as content_start. */
+.button--action--start {
+    border-color: rgba(34, 197, 94, 0.4);
+    color: #86efac;
+}
+
+.button--action--start:hover {
+    background: rgba(34, 197, 94, 0.12);
+    border-color: var(--success);
+    color: #fff;
+}
+
+/* Stop — red, destructive. Same treatment as blackout. */
+.button--action--stop {
+    border-color: rgba(224, 82, 82, 0.4);
+    color: #f39a9a;
+}
+
+.button--action--stop:hover {
+    background: rgba(224, 82, 82, 0.12);
+    border-color: var(--error);
+    color: #fff;
+}
