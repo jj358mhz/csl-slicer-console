@@ -1220,3 +1220,38 @@ form.inline {
     color: #4ade80;
     white-space: nowrap;
 }
+
+/* ==========================================================================
+   22. Scoped API Key permissions (admin edit form)
+   ========================================================================== */
+
+.scopes__label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 0 0 6px;
+}
+
+.scopes__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.scopes__list li {
+    margin: 0;
+}
+
+//* Neutral scope pill — informational, not actionable.
+   Sits alongside admin (pink) / active (green) badges without competing. */
+.badge--scope {
+    background: rgba(255, 255, 255, .04);
+    color: var(--text);
+    border-color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    cursor: help;   /* hints at the tooltip */
+}

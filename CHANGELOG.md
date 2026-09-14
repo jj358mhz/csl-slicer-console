@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Added
+- Admin scope viewer on the Uplynk account edit form — displays the scopes granted to each stored scoped API key as badges with hover tooltips. Read-only, admin-only. (#14)
+
+### 🐛 Fixed
+- Corrected scoped API key scope string in file-upload help text and test fixture (`video.services.ingest.slicer.cloudslicer.live:read` — was missing `.slicer`).
+
+---
+
 ## [1.3.0] — 2026-09-12
 
 ### Added
@@ -14,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🛰️ **SRT push/pull qualifier** — tile meta line now reads `us-east-1 · SRT pull` (or `push`) instead of just `SRT`. Populated at sync time from the v4 API's `connection_mode` field. Closes [#3](https://github.com/jj358mhz/csl-slicer-console/issues/3).
 - 🔌 New `retrieve_slicer()` on the v4 discovery client and `poll_slicer_state()` service (access-checked, same policy as `control_slicer`).
 - 🗄️ New `connection_mode` column on `slicers` (Alembic migration `5ca8377f1cb7`).
+
+---
 
 ## [1.2.1] — 2026-09-12
 

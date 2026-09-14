@@ -39,13 +39,19 @@
             {% if form.scoped_env_file.description %}<p class="field__help">{{ form.scoped_env_file.description }}</p>{%
             endif %}
             {% for err in form.scoped_env_file.errors %}<p class="field__error">{{ err }}</p>{% endfor %}
-            {% if mode == 'edit' and account.has_scoped_key %}
+                        {% if mode == 'edit' and account.has_scoped_key %}
             <p class="field__help">
                 Currently loaded — KID: <span class="mono">{{ account.scoped_kid }}</span>.
                 Upload a new file to replace it.
             </p>
             {% endif %}
         </div>
+
+        {% if mode == 'edit' %}
+        <div class="field">
+            {% include "admin/_scopes.html" %}
+        </div>
+        {% endif %}
 
         <div class="form-actions">
             {{ form.submit(class="button button--primary") }}

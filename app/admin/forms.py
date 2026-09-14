@@ -49,7 +49,7 @@ class UplynkAccountForm(FlaskForm):
         ],
         description="Download the .env file from Settings → Scoped API Keys "
         "in the Uplynk CMS. Required scope: "
-        "video.services.ingest.cloudslicer.live:read. "
+        "video.services.ingest.slicer.cloudslicer.live:read. "
         "Leave blank to keep existing value.",
     )
     submit = SubmitField("Save")
