@@ -1,0 +1,10 @@
+{# Coalesced polling response: emits an OOB badge + OOB meta swap for every
+   slicer the current user can see on this account. HTMX processes each
+   `hx-swap-oob="true"` fragment independently, replacing the matching
+   element by id anywhere on the page — no main swap target required. #}
+{% for s in slicers %}
+    {% with oob=True %}{% include 'slicers/_badge.html' %}{% endwith %}
+    <div id="meta-{{ s.id }}" class="slicer-card__meta" hx-swap-oob="true">
+        {% include 'slicers/_meta.html' %}
+    </div>
+{% endfor %}
