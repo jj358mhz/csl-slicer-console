@@ -14,7 +14,7 @@ from app.uplynk.states import (
 
 def test_retrieve_states_match_uplynk_docs():
     """The 8 values documented at docs.uplynk.com/reference/retrieve_live_cloud_slicer."""
-    assert KNOWN_RETRIEVE_STATES == {
+    assert {
         "Stopped",
         "Initializing",
         "Ready",
@@ -23,12 +23,12 @@ def test_retrieve_states_match_uplynk_docs():
         "ReplacingContent",
         "AdBreak",
         "Stopping",
-    }
+    } == KNOWN_RETRIEVE_STATES
 
 
 def test_control_states_match_uplynk_docs():
     """The 4 state_name values documented at docs.uplynk.com/reference/state."""
-    assert KNOWN_CONTROL_STATES == {"Capture", "Ad", "Replace", "Blackout"}
+    assert {"Capture", "Ad", "Replace", "Blackout"} == KNOWN_CONTROL_STATES
 
 
 def test_control_state_int_is_canonical():
