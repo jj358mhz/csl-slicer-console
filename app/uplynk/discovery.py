@@ -31,6 +31,7 @@ class DiscoveredSlicer:
     protocol: str | None
     plugin_id: str | None
     plugin_version: str | None
+    # Retrieve vocabulary — see app.uplynk.states.RetrieveState for the enum.
     state: str | None
     description: str | None
     connection_mode: str | None  # "push" | "pull" | None. Only meaningful for SRT.

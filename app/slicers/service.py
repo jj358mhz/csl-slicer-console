@@ -172,6 +172,9 @@ def poll_slicer_state(user: User, slicer: Slicer) -> Slicer:
 
     from datetime import UTC, datetime
 
+    # last_state uses the v4 retrieve vocabulary (see app.uplynk.states).
+    # The SHA1 control /state endpoint uses a different vocabulary that only
+    # lands in AuditEvent.response_snippet — never rendered as a badge.
     slicer.last_state = fresh.state
     slicer.connection_mode = fresh.connection_mode
     slicer.last_seen_at = datetime.now(UTC)
