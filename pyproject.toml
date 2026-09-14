@@ -1,6 +1,6 @@
 [project]
 name = "csl-slicer-console"
-version = "1.4.0"
+version = "1.5.0"
 description = "Web console for controlling Uplynk CSL ingest slicers"
 readme = "README.md"
 requires-python = ">=3.12"

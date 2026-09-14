@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-13
+
+### ♻️ Changed
+- Coalesced dashboard state polling — one `list_slicers()` call per account per 30-second interval, instead of one `retrieve_slicer()` call per slicer. For a 9-slicer account that's a 9× reduction in Uplynk API traffic. Per-slicer polling on `GET /slicers/<id>/state` stays available for on-demand refresh. (#16)
+- Skipped no-op DB writes on state polls. When `last_state` and `connection_mode` both match what's already on the row, the poll commits nothing (including `last_seen_at`). For a steady-state fleet that's zero SQLite writes across a polling interval rather than one per slicer. (#15)
+
+---
+
 ## [1.4.0] - 2026-09-13
 
 ### ✨ Added

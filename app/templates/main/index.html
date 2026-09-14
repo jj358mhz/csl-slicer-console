@@ -29,7 +29,7 @@
             <section class="account-section"
                      id="section-{{ account_label }}"
                      data-section="{{ account_label }}">
-                <div class="account-section__header">
+                                <div class="account-section__header">
                     <h2 class="account-section__title">
                         <span class="account-section__chevron" aria-hidden="true">▶</span>
                         {{ account_label }}
@@ -40,6 +40,11 @@
                         <span>Select all</span>
                     </label>
                 </div>
+                <span class="account-poll"
+                      hx-get="{{ url_for('slicers.account_states', account_id=group[0].uplynk_account_id) }}"
+                      hx-trigger="every 30s"
+                      hx-swap="none"
+                      aria-hidden="true"></span>
                 <div class="account-section__body slicer-grid">
                     {% for s in group %}
                         <div class="slicer-card"

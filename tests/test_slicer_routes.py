@@ -324,3 +324,193 @@ def test_control_route_still_dispatches_status_to_control_slicer(app, client):
 
     mock_control.assert_called_once()
     mock_target.assert_not_called()
+
+
+# --- Helpers for the coalesced-poll route ---
+
+
+def _make_account_with_slicers(app, n=3):
+    """Account with a scoped key + N slicers. Returns (account_id, slicer_ids)."""
+    with app.app_context():
+        acct = UplynkAccount(
+            label="Acct",
+            workspace_id="ws",
+            legacy_api_key_encrypted=encrypt("legacy-key"),
+        )
+        acct.scoped_kid = "test-kid"
+        acct.scoped_sub = "test-sub"
+        acct.scoped_private_b64_encrypted = encrypt("dummy-private-b64")
+        acct.scoped_scp = "video.services.ingest.cloudslicer.live:read"
+        db.session.add(acct)
+        db.session.flush()
+
+        slicer_ids = []
+        for i in range(n):
+            s = Slicer(
+                uplynk_account_id=acct.id,
+                slicer_id=f"s{i + 1}",
+                slicer_api_url=f"https://ingest.example.com/s{i + 1}",
+                is_active=True,
+                last_state="Stopped",
+                protocol="SRT",
+            )
+            db.session.add(s)
+            db.session.flush()
+            slicer_ids.append(s.id)
+        db.session.commit()
+        return acct.id, slicer_ids
+
+
+# --- Tests for GET /slicers/accounts/<id>/slicer-states ---
+
+
+def test_account_states_requires_login(app, client):
+    account_id, _ = _make_account_with_slicers(app)
+    response = client.get(
+        f"/slicers/accounts/{account_id}/slicer-states",
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert "/auth/login" in response.headers["Location"]
+
+
+def test_account_states_admin_gets_all_slicers(app, client):
+    _login(client)  # bootstrap admin
+    account_id, _ = _make_account_with_slicers(app, n=3)
+    fresh_list = [
+        DiscoveredSlicer(
+            slicer_id=f"s{i + 1}",
+            slicer_api_url=f"https://ingest.example.com/s{i + 1}",
+            region="us-east-1",
+            protocol="SRT",
+            plugin_id=None,
+            plugin_version=None,
+            state="Slicing",
+            description=None,
+            connection_mode="pull",
+        )
+        for i in range(3)
+    ]
+    with patch(
+        "app.uplynk.discovery.UplynkDiscoveryClient.list_slicers",
+        return_value=fresh_list,
+    ):
+        response = client.get(f"/slicers/accounts/{account_id}/slicer-states")
+
+    assert response.status_code == 200
+    body = response.data
+    # All three badges present with fresh state
+    assert body.count(b'hx-swap-oob="true"') >= 6  # 3 badges + 3 meta rows
+    assert b'id="badge-1"' in body
+    assert b'id="badge-2"' in body
+    assert b'id="badge-3"' in body
+    assert body.count(b"Slicing") >= 3
+    assert b"SRT pull" in body
+
+
+def test_account_states_regular_user_gets_assigned_subset_only(app, client):
+    account_id, slicer_ids = _make_account_with_slicers(app, n=3)
+    # Create a regular user assigned to only s1 and s2 (not s3).
+    with app.app_context():
+        u = User(
+            email="ru@example.com",
+            password_hash=hash_password("password123"),
+        )
+        db.session.add(u)
+        db.session.flush()
+        for sid in slicer_ids[:2]:
+            u.slicers.append(db.session.get(Slicer, sid))
+        db.session.commit()
+
+    _login(client, "ru@example.com", "password123")
+
+    fresh_list = [
+        DiscoveredSlicer(
+            slicer_id=f"s{i + 1}",
+            slicer_api_url=f"https://ingest.example.com/s{i + 1}",
+            region="us-east-1",
+            protocol="SRT",
+            plugin_id=None,
+            plugin_version=None,
+            state="Slicing",
+            description=None,
+            connection_mode="pull",
+        )
+        for i in range(3)
+    ]
+    with patch(
+        "app.uplynk.discovery.UplynkDiscoveryClient.list_slicers",
+        return_value=fresh_list,
+    ):
+        response = client.get(f"/slicers/accounts/{account_id}/slicer-states")
+
+    assert response.status_code == 200
+    body = response.data
+    # Only s1 and s2 rendered; s3 fragments absent.
+    assert f'id="badge-{slicer_ids[0]}"'.encode() in body
+    assert f'id="badge-{slicer_ids[1]}"'.encode() in body
+    assert f'id="badge-{slicer_ids[2]}"'.encode() not in body
+
+
+def test_account_states_regular_user_with_no_assignments_denied(app, client):
+    account_id, _ = _make_account_with_slicers(app, n=3)
+    with app.app_context():
+        u = User(
+            email="unassigned@example.com",
+            password_hash=hash_password("password123"),
+        )
+        db.session.add(u)
+        db.session.commit()
+
+    _login(client, "unassigned@example.com", "password123")
+    response = client.get(f"/slicers/accounts/{account_id}/slicer-states")
+    assert response.status_code == 403
+
+
+def test_account_states_unknown_account_returns_404(app, client):
+    _login(client)
+    response = client.get("/slicers/accounts/99999/slicer-states")
+    assert response.status_code == 404
+
+
+def test_account_states_uplynk_error_serves_stale_rows(app, client):
+    """When Uplynk hiccups, render last-known state per slicer rather than 500."""
+    _login(client)
+    account_id, _ = _make_account_with_slicers(app, n=3)
+    with patch(
+        "app.uplynk.discovery.UplynkDiscoveryClient.list_slicers",
+        side_effect=UplynkAPIError("boom"),
+    ):
+        response = client.get(f"/slicers/accounts/{account_id}/slicer-states")
+
+    assert response.status_code == 200
+    # All three stale rows still render with their last-known state.
+    assert response.data.count(b"Stopped") >= 3
+    assert response.data.count(b'hx-swap-oob="true"') >= 6
+
+
+def test_account_states_makes_single_uplynk_call(app, client):
+    """One list_slicers() call per poll, regardless of slicer count."""
+    _login(client)
+    account_id, _ = _make_account_with_slicers(app, n=5)
+    fresh_list = [
+        DiscoveredSlicer(
+            slicer_id=f"s{i + 1}",
+            slicer_api_url=f"https://ingest.example.com/s{i + 1}",
+            region="us-east-1",
+            protocol="SRT",
+            plugin_id=None,
+            plugin_version=None,
+            state="Slicing",
+            description=None,
+            connection_mode="pull",
+        )
+        for i in range(5)
+    ]
+    with patch(
+        "app.uplynk.discovery.UplynkDiscoveryClient.list_slicers",
+        return_value=fresh_list,
+    ) as mock_list:
+        client.get(f"/slicers/accounts/{account_id}/slicer-states")
+
+    assert mock_list.call_count == 1

@@ -5,10 +5,11 @@ from __future__ import annotations
 from flask import Blueprint, abort, render_template, request
 from flask_login import current_user, login_required
 
-from app.models import Slicer, db
+from app.models import Slicer, UplynkAccount, db
 from app.slicers.service import (
     SlicerAccessDenied,
     control_slicer,
+    poll_account_slicer_states,
     poll_slicer_state,
     set_target_state,
 )
@@ -81,3 +82,34 @@ def state(slicer_id: int):
         pass
 
     return render_template("slicers/_state.html", s=slicer)
+
+
+@bp.route("/accounts/<int:account_id>/slicer-states", methods=["GET"])
+@login_required
+def account_states(account_id: int):
+    """GET /slicers/accounts/<id>/slicer-states — coalesced HTMX polling endpoint.
+
+    Fetches all slicer states for one Uplynk account in a single API call and
+    returns an HTML fragment with OOB swap targets for every slicer the
+    current user can see. Called once per account section on the dashboard
+    instead of once per slicer card.
+    """
+    account = db.session.get(UplynkAccount, account_id)
+    if account is None:
+        abort(404)
+
+    try:
+        visible = poll_account_slicer_states(current_user, account)
+    except SlicerAccessDenied:
+        abort(403)
+    except UplynkAPIError:
+        # Uplynk hiccup — render whatever we last saw for each visible slicer
+        # so no badge disappears. Matches poll_slicer_state's stale-on-error
+        # policy. Rebuild the visible list without hitting Uplynk.
+        if current_user.is_admin:
+            visible = [s for s in account.slicers if s.is_active]
+        else:
+            assigned_ids = {s.id for s in current_user.slicers}
+            visible = [s for s in account.slicers if s.is_active and s.id in assigned_ids]
+
+    return render_template("slicers/_account_state.html", slicers=visible)
