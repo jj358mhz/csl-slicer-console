@@ -8,8 +8,6 @@ from unittest.mock import MagicMock
 import jwt
 import pytest
 import requests
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
 
 from app.uplynk.discovery import (
     DiscoveredSlicer,
@@ -30,22 +28,6 @@ SAMPLE_ITEM = {
     "plugin": {"id": "tennis-scte35", "version": "1.0"},
     "description": "Test slicer",
 }
-
-
-@pytest.fixture(scope="module")
-def ec_keypair():
-    """Generate a real ES256 keypair for signing test JWTs."""
-    private_key = ec.generate_private_key(ec.SECP256R1())
-    pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-    public_key = private_key.public_key()
-    return {
-        "private_b64": base64.b64encode(pem).decode(),
-        "public_key": public_key,
-    }
 
 
 def _mock_response(status_code=200, json_data=None, text=""):

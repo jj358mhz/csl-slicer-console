@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import base64
+
 import pytest
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 
 @pytest.fixture
@@ -34,3 +38,19 @@ def app(monkeypatch, tmp_path):
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture(scope="module")
+def ec_keypair():
+    """Generate a real ES256 keypair for signing test JWTs."""
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_key = private_key.public_key()
+    return {
+        "private_b64": base64.b64encode(pem).decode(),
+        "public_key": public_key,
+    }
