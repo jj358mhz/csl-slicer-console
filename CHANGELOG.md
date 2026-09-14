@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Fixed
 - Corrected scoped API key scope string in file-upload help text and test fixture (`video.services.ingest.slicer.cloudslicer.live:read` — was missing `.slicer`).
 
+### ♻️ Changed
+- Reconciled the two Uplynk slicer state vocabularies in a canonical `app/uplynk/states.py` module. Retrieve vocab (`Slicing`, `AdBreak`, `Blackout`, `Stopped`, etc — 8 values) renders on tile badges via `slicer.last_state`; SHA1 control vocab (`Capture`, `Ad`, `Replace`, `Blackout` — 4 values) lands in `AuditEvent.response_snippet` only. Only `Blackout` spells identically in both. (#11)
+
 ---
 
 ## [1.3.0] — 2026-09-12
