@@ -248,3 +248,79 @@ def test_state_without_scoped_key_serves_stale_row(app, client):
     response = client.get(f"/slicers/{slicer_id}/state")
     assert response.status_code == 200
     assert b"Slicing" in response.data
+
+
+# ---------------------------------------------------------------------------
+# Route dispatch — start/stop methods route to set_target_state, not control_slicer
+# ---------------------------------------------------------------------------
+
+
+def test_control_route_dispatches_start_to_target_state(app, client):
+    """method=start hits set_target_state, not control_slicer."""
+    _login(client)
+    slicer_id = _make_slicer_with_scoped_key(app)
+
+    with (
+        patch("app.slicers.routes.set_target_state") as mock_target,
+        patch("app.slicers.routes.control_slicer") as mock_control,
+    ):
+        from app.slicers.service import ControlOutcome
+
+        mock_target.return_value = ControlOutcome(
+            result=CSLResult(status_code=200, body={"target_state": "Ready"}, ok=True),
+        )
+        response = client.post(
+            f"/slicers/{slicer_id}/control",
+            data={"method": "start"},
+        )
+
+    assert response.status_code == 200
+    mock_target.assert_called_once()
+    mock_control.assert_not_called()
+    assert mock_target.call_args.args[2] == "start"
+
+
+def test_control_route_dispatches_stop_to_target_state(app, client):
+    _login(client)
+    slicer_id = _make_slicer_with_scoped_key(app)
+
+    with (
+        patch("app.slicers.routes.set_target_state") as mock_target,
+        patch("app.slicers.routes.control_slicer") as mock_control,
+    ):
+        from app.slicers.service import ControlOutcome
+
+        mock_target.return_value = ControlOutcome(
+            result=CSLResult(status_code=200, body={"target_state": "Stopped"}, ok=True),
+        )
+        client.post(
+            f"/slicers/{slicer_id}/control",
+            data={"method": "stop"},
+        )
+
+    mock_target.assert_called_once()
+    mock_control.assert_not_called()
+    assert mock_target.call_args.args[2] == "stop"
+
+
+def test_control_route_still_dispatches_status_to_control_slicer(app, client):
+    """SHA1 methods still route to control_slicer — dispatch is backward-compatible."""
+    _login(client)
+    slicer_id = _make_slicer_with_scoped_key(app)
+
+    with (
+        patch("app.slicers.routes.control_slicer") as mock_control,
+        patch("app.slicers.routes.set_target_state") as mock_target,
+    ):
+        from app.slicers.service import ControlOutcome
+
+        mock_control.return_value = ControlOutcome(
+            result=CSLResult(status_code=200, body={"state": "Capture"}, ok=True),
+        )
+        client.post(
+            f"/slicers/{slicer_id}/control",
+            data={"method": "status"},
+        )
+
+    mock_control.assert_called_once()
+    mock_target.assert_not_called()
