@@ -61,7 +61,7 @@
                             </div>
 
                             <div class="slicer-card__actions">
-                                {% for method in ['status', 'state', 'content_start', 'blackout'] %}
+                                                                {% for method in ['status', 'state', 'content_start', 'blackout', 'start', 'stop'] %}
                                     <form hx-post="{{ url_for('slicers.control', slicer_id=s.id) }}"
                                           hx-target="#result-{{ s.id }}"
                                           hx-swap="innerHTML"
@@ -92,7 +92,7 @@
             <div class="batch-bar__count">
                 <span id="batch-count">0</span> slicers selected
             </div>
-            <div class="batch-bar__actions">
+                        <div class="batch-bar__actions">
                 <button type="button" class="button button--action" data-batch-method="status">Status</button>
                 <button type="button" class="button button--action" data-batch-method="state">State</button>
                 <button type="button" class="button button--action button--action--content_start"
@@ -101,6 +101,12 @@
                 <button type="button" class="button button--action button--action--blackout"
                         data-batch-method="blackout">
                     Blackout
+                </button>
+                <button type="button" class="button button--action button--action--start"
+                        data-batch-method="start">Start
+                </button>
+                <button type="button" class="button button--action button--action--stop"
+                        data-batch-method="stop">Stop
                 </button>
             </div>
             <button type="button" id="batch-clear" class="link-button">Clear selection</button>
@@ -380,7 +386,7 @@
                 }
 
                 // ---- Batch fire ----
-                const DESTRUCTIVE = new Set(['content_start', 'blackout']);
+                const DESTRUCTIVE = new Set(['content_start', 'blackout', 'stop']);
 
                 async function fireBatch(method) {
                     const selected = Array.from(document.querySelectorAll('.slicer-checkbox:checked'));

@@ -10,6 +10,11 @@ from app.crypto import decrypt
 from app.models import AuditEvent, Slicer, User, db
 from app.uplynk.csl import SLICER_METHODS, CSLError, CSLResult, call_slicer
 from app.uplynk.discovery import UplynkAPIError, UplynkDiscoveryClient
+from app.uplynk.target_state import (
+    TARGET_STATE_METHODS,
+    TargetStateResult,
+    set_slicer_target_state,
+)
 
 
 class SlicerAccessDenied(RuntimeError):
@@ -180,3 +185,135 @@ def poll_slicer_state(user: User, slicer: Slicer) -> Slicer:
     slicer.last_seen_at = datetime.now(UTC)
     db.session.commit()
     return slicer
+
+
+def set_target_state(
+    user: User,
+    slicer: Slicer,
+    method_name: str,
+    *,
+    dry_run: bool = False,
+) -> ControlOutcome:
+    """Set a slicer's target_state via the v4 PATCH endpoint.
+
+    method_name is 'start' or 'stop' (see TARGET_STATE_METHODS). Same
+    authorization + audit shape as control_slicer(), just against a
+    different Uplynk subsystem (v4 JWT/scoped key rather than SHA1/legacy).
+
+    Raises SlicerAccessDenied if the user isn't allowed to control this
+    slicer. HTTP-level failures land in ControlOutcome.error; network and
+    scoped-key problems land in the same place.
+    """
+    if not _user_can_control(user, slicer):
+        raise SlicerAccessDenied(f"User {user.email} is not assigned to slicer {slicer.slicer_id}")
+
+    target_state = TARGET_STATE_METHODS.get(method_name)
+    if target_state is None:
+        return _record_and_return(
+            user,
+            slicer,
+            method_name,
+            dry_run,
+            error=f"Unknown target-state method '{method_name}'",
+        )
+
+    account = slicer.uplynk_account
+    if not account.has_scoped_key:
+        return _record_and_return(
+            user,
+            slicer,
+            method_name,
+            dry_run,
+            error=(
+                f"Account {account.label!r} has no scoped API key — "
+                "cannot set target_state (requires v4 API auth)"
+            ),
+        )
+
+    if dry_run:
+        current_app.logger.info(
+            "DRY RUN — would PATCH target_state=%s on slicer %s",
+            target_state,
+            slicer.slicer_id,
+        )
+        return _record_and_return(
+            user,
+            slicer,
+            method_name,
+            dry_run,
+            result=CSLResult(
+                status_code=0,
+                body=f"[dry-run] target_state={target_state}",
+                ok=True,
+            ),
+        )
+
+    try:
+        private_b64 = decrypt(account.scoped_private_b64_encrypted)
+    except Exception as e:
+        return _record_and_return(
+            user,
+            slicer,
+            method_name,
+            dry_run,
+            error=f"Failed to decrypt scoped key: {e}",
+        )
+
+    try:
+        outcome = set_slicer_target_state(
+            api_base=current_app.config["UPLYNK_API_BASE"],
+            slicer_id=slicer.slicer_id,
+            target_state=target_state,
+            kid=account.scoped_kid,
+            sub=account.scoped_sub,
+            private_b64=private_b64,
+            scp=account.scoped_scp,
+        )
+    except UplynkAPIError as e:
+        return _record_and_return(
+            user,
+            slicer,
+            method_name,
+            dry_run,
+            error=str(e),
+        )
+
+    return _record_and_return_target_state(user, slicer, method_name, dry_run, outcome)
+
+
+def _record_and_return_target_state(
+    user: User,
+    slicer: Slicer,
+    method_name: str,
+    dry_run: bool,
+    outcome: TargetStateResult,
+) -> ControlOutcome:
+    """Persist an AuditEvent for a target_state call.
+
+    TargetStateResult has the same shape as CSLResult but is not the same
+    type — this helper adapts it so ControlOutcome carries a consistent
+    payload regardless of subsystem.
+    """
+    event = AuditEvent(
+        user_id=user.id,
+        slicer_id=slicer.id,
+        method=method_name,
+        status_code=outcome.status_code,
+        response_snippet=outcome.summary[:500] if outcome.summary else None,
+        dry_run=dry_run,
+    )
+    db.session.add(event)
+    db.session.commit()
+
+    # ControlOutcome expects a CSLResult; adapt so the route/template path
+    # doesn't need to know which subsystem produced this.
+    adapted = CSLResult(
+        status_code=outcome.status_code,
+        body=outcome.body,
+        ok=outcome.ok,
+    )
+    return ControlOutcome(
+        result=adapted if outcome.ok else None,
+        error=None if outcome.ok else outcome.summary,
+        audit_event_id=event.id,
+    )
