@@ -6,9 +6,15 @@ from flask import Blueprint, abort, render_template, request
 from flask_login import current_user, login_required
 
 from app.models import Slicer, db
-from app.slicers.service import SlicerAccessDenied, control_slicer, poll_slicer_state
+from app.slicers.service import (
+    SlicerAccessDenied,
+    control_slicer,
+    poll_slicer_state,
+    set_target_state,
+)
 from app.uplynk.csl import SLICER_METHODS
 from app.uplynk.discovery import UplynkAPIError
+from app.uplynk.target_state import TARGET_STATE_METHODS
 
 bp = Blueprint("slicers", __name__, url_prefix="/slicers")
 
@@ -18,6 +24,10 @@ bp = Blueprint("slicers", __name__, url_prefix="/slicers")
 def control(slicer_id: int):
     """POST /slicers/<id>/control with form field 'method'.
 
+    Dispatches by method name:
+    - SHA1 control methods (status/state/content_start/blackout) → control_slicer
+    - v4 target-state methods (start/stop) → set_target_state
+
     Returns a small HTML fragment (for HTMX to swap in) showing the result.
     """
     slicer = db.session.get(Slicer, slicer_id)
@@ -25,13 +35,17 @@ def control(slicer_id: int):
         abort(404)
 
     method_name = request.form.get("method", "").strip()
-    if method_name not in SLICER_METHODS:
-        abort(400)
-
     dry_run = request.form.get("dry_run") == "1"
 
+    if method_name in SLICER_METHODS:
+        service_fn = control_slicer
+    elif method_name in TARGET_STATE_METHODS:
+        service_fn = set_target_state
+    else:
+        abort(400)
+
     try:
-        outcome = control_slicer(current_user, slicer, method_name, dry_run=dry_run)
+        outcome = service_fn(current_user, slicer, method_name, dry_run=dry_run)
     except SlicerAccessDenied:
         abort(403)
 
