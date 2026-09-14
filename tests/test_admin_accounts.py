@@ -347,4 +347,3 @@ def test_scope_list_ignores_whitespace_and_empty_entries(app, client):
     body = response.data.decode()
     # Exactly two badges rendered — the empty entry between the commas is skipped
     assert body.count('class="badge badge--scope"') == 2
-
