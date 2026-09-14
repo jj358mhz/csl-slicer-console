@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import requests
@@ -80,9 +80,7 @@ def test_success_summary_echoes_target_state():
         json_data={"id": "s1", "target_state": "Stopped"},
     )
 
-    result = set_slicer_target_state(
-        **_valid_kwargs(target_state="Stopped"), session=session
-    )
+    result = set_slicer_target_state(**_valid_kwargs(target_state="Stopped"), session=session)
     assert result.summary == "OK — target_state=Stopped"
 
 
