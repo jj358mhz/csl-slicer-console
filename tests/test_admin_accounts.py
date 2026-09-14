@@ -29,12 +29,12 @@ def _make_regular_user(app):
         db.session.commit()
 
 
-def _scoped_env_bytes(kid="k-1", sub="s-1"):
+def _scoped_env_bytes(kid="k-1", sub="s-1", scp="video.services.ingest.slicer.cloudslicer.live:read"):
     return (
         f"KID={kid}\n"
         f"SUB={sub}\n"
         "PRIVATE_B64=aGVsbG8=\n"
-        "SCP=video.services.ingest.cloudslicer.live:read\n"
+        f"SCP={scp}\n"
     ).encode()
 
 
