@@ -115,8 +115,8 @@ def test_dashboard_renders_control_buttons(app, client):
     _make_slicer(app)
     response = client.get("/")
     assert response.status_code == 200
-    # Buttons present for all four methods
-    for method in ["status", "state", "content_start", "blackout"]:
+    # Buttons present for all six methods (four SHA1 + two v4 target-state)
+    for method in ["status", "state", "content_start", "blackout", "start", "stop"]:
         assert f'value="{method}"'.encode() in response.data
     # HTMX attribute present
     assert b"hx-post" in response.data

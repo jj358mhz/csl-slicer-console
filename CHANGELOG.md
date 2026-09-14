@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ♻️ Changed
 - Reconciled the two Uplynk slicer state vocabularies in a canonical `app/uplynk/states.py` module. Retrieve vocab (`Slicing`, `AdBreak`, `Blackout`, `Stopped`, etc — 8 values) renders on tile badges via `slicer.last_state`; SHA1 control vocab (`Capture`, `Ad`, `Replace`, `Blackout` — 4 values) lands in `AuditEvent.response_snippet` only. Only `Blackout` spells identically in both. (#11)
+- Start/Stop actions for slicers on the dashboard and batch bar. Uses the v4 PATCH endpoint with `target_state: Ready|Stopped`, JWT auth. Requires the `:write` scope on the account's scoped key; without it, the call 403s and the audit log captures why. (#1)
 
 ---
 
