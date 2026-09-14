@@ -9,8 +9,13 @@ import pytest
 from app.auth.passwords import hash_password
 from app.crypto import encrypt
 from app.models import AuditEvent, Slicer, UplynkAccount, User, db
-from app.slicers.service import SlicerAccessDenied, control_slicer
+from app.slicers.service import (
+    SlicerAccessDenied,
+    control_slicer,
+    poll_account_slicer_states,
+)
 from app.uplynk.csl import CSLError, CSLResult
+from app.uplynk.discovery import DiscoveredSlicer, UplynkAPIError
 
 
 def _mk_scene(app, *, admin=False, assign_slicer=True):
@@ -44,6 +49,74 @@ def _mk_scene(app, *, admin=False, assign_slicer=True):
             user.slicers.append(slicer)
         db.session.commit()
         return {"user_id": user.id, "slicer_id": slicer.id}
+
+
+def _mk_account_scene(app, *, n_slicers=3, admin=False, assign_first_n=None):
+    """Build one scoped-key account with N slicers and a user.
+
+    - `assign_first_n` (regular users only): assign the user to the first N
+      slicers. Defaults to all of them. Ignored for admin.
+    Returns dict with user_id, account_id, and slicer_ids (in creation order).
+    """
+    with app.app_context():
+        acct = UplynkAccount(
+            label="Acct",
+            workspace_id="ws",
+            legacy_api_key_encrypted=encrypt("legacy-key"),
+        )
+        acct.scoped_kid = "test-kid"
+        acct.scoped_sub = "test-sub"
+        acct.scoped_private_b64_encrypted = encrypt("dummy-private-b64")
+        acct.scoped_scp = "video.services.ingest.cloudslicer.live:read"
+        db.session.add(acct)
+        db.session.flush()
+
+        slicer_ids = []
+        for i in range(n_slicers):
+            s = Slicer(
+                uplynk_account_id=acct.id,
+                slicer_id=f"s{i + 1}",
+                slicer_api_url=f"https://ingest.example.com/s{i + 1}",
+                is_active=True,
+                last_state="Stopped",
+                protocol="SRT",
+            )
+            db.session.add(s)
+            db.session.flush()
+            slicer_ids.append(s.id)
+
+        user = User(
+            email="controller@example.com",
+            password_hash=hash_password("password-1234"),
+            is_admin=admin,
+        )
+        db.session.add(user)
+        db.session.flush()
+
+        if not admin:
+            n_assign = n_slicers if assign_first_n is None else assign_first_n
+            for sid in slicer_ids[:n_assign]:
+                user.slicers.append(db.session.get(Slicer, sid))
+        db.session.commit()
+        return {
+            "user_id": user.id,
+            "account_id": acct.id,
+            "slicer_ids": slicer_ids,
+        }
+
+
+def _fresh(slicer_id, state="Slicing", connection_mode="pull"):
+    return DiscoveredSlicer(
+        slicer_id=slicer_id,
+        slicer_api_url=f"https://ingest.example.com/{slicer_id}",
+        region="us-east-1",
+        protocol="SRT",
+        plugin_id=None,
+        plugin_version=None,
+        state=state,
+        description=None,
+        connection_mode=connection_mode,
+    )
 
 
 def test_regular_user_can_control_assigned_slicer(app):
@@ -310,7 +383,6 @@ def test_target_state_dry_run_does_not_call_api(app):
 def test_target_state_uplynk_error_recorded(app):
     """UplynkAPIError from the client lands in the audit log, doesn't raise."""
     from app.slicers.service import set_target_state
-    from app.uplynk.discovery import UplynkAPIError
 
     ids = _mk_scene_with_scoped_key(app)
     with app.app_context():
@@ -346,3 +418,111 @@ def test_target_state_403_from_api_is_not_ok(app):
         assert outcome.ok is False
         event = db.session.query(AuditEvent).filter_by(method="start").one()
         assert event.status_code == 403
+
+
+def test_poll_account_states_makes_one_list_call(app):
+    """One list_slicers() call per poll, regardless of slicer count."""
+    ids = _mk_account_scene(app, n_slicers=5, admin=True)
+    fresh_list = [_fresh(f"s{i + 1}") for i in range(5)]
+
+    with app.app_context():
+        user = db.session.get(User, ids["user_id"])
+        account = db.session.get(UplynkAccount, ids["account_id"])
+        with patch(
+            "app.slicers.service.UplynkDiscoveryClient.list_slicers",
+            return_value=fresh_list,
+        ) as mock_list:
+            result = poll_account_slicer_states(user, account)
+
+        assert mock_list.call_count == 1
+        assert len(result) == 5
+        # All five got the fresh state
+        for s in result:
+            assert s.last_state == "Slicing"
+
+
+def test_poll_account_states_regular_user_gets_only_assigned_subset(app):
+    """A user assigned to 2 of 5 slicers sees only those 2 in the result."""
+    ids = _mk_account_scene(app, n_slicers=5, assign_first_n=2)
+    fresh_list = [_fresh(f"s{i + 1}") for i in range(5)]
+
+    with app.app_context():
+        user = db.session.get(User, ids["user_id"])
+        account = db.session.get(UplynkAccount, ids["account_id"])
+        with patch(
+            "app.slicers.service.UplynkDiscoveryClient.list_slicers",
+            return_value=fresh_list,
+        ):
+            result = poll_account_slicer_states(user, account)
+
+        returned_ids = {s.slicer_id for s in result}
+        assert returned_ids == {"s1", "s2"}
+        # And the unassigned slicers weren't touched
+        s3 = db.session.query(Slicer).filter_by(slicer_id="s3").one()
+        assert s3.last_state == "Stopped"
+
+
+def test_poll_account_states_skips_write_when_all_unchanged(app):
+    """Second poll with identical values makes no DB write (see #15)."""
+    ids = _mk_account_scene(app, n_slicers=3, admin=True)
+    fresh_list = [_fresh(f"s{i + 1}", state="Slicing", connection_mode="pull") for i in range(3)]
+
+    with app.app_context():
+        user = db.session.get(User, ids["user_id"])
+        account = db.session.get(UplynkAccount, ids["account_id"])
+        # First poll: state changes from "Stopped" to "Slicing" — writes happen.
+        with patch(
+            "app.slicers.service.UplynkDiscoveryClient.list_slicers",
+            return_value=fresh_list,
+        ):
+            poll_account_slicer_states(user, account)
+
+        # Snapshot last_seen_at after the first poll for every slicer.
+        seen_after_first = {s.slicer_id: s.last_seen_at for s in db.session.query(Slicer).all()}
+        for ts in seen_after_first.values():
+            assert ts is not None
+
+        # Second poll: identical fresh values → no write, last_seen_at unchanged.
+        with patch(
+            "app.slicers.service.UplynkDiscoveryClient.list_slicers",
+            return_value=fresh_list,
+        ):
+            poll_account_slicer_states(user, account)
+
+        for s in db.session.query(Slicer).all():
+            assert s.last_seen_at == seen_after_first[s.slicer_id]
+
+
+def test_poll_account_states_denies_user_with_no_assignments(app):
+    """A regular user with zero slicers on this account gets SlicerAccessDenied."""
+    ids = _mk_account_scene(app, n_slicers=3, assign_first_n=0)
+
+    with app.app_context():
+        user = db.session.get(User, ids["user_id"])
+        account = db.session.get(UplynkAccount, ids["account_id"])
+        with pytest.raises(SlicerAccessDenied):
+            poll_account_slicer_states(user, account)
+
+
+def test_poll_account_states_missing_from_fresh_leaves_row_untouched(app):
+    """A slicer Uplynk didn't return keeps its stale row (matches single-slicer path)."""
+    ids = _mk_account_scene(app, n_slicers=3, admin=True)
+    # Only s1 and s2 come back — s3 is absent from Uplynk's list response.
+    fresh_list = [_fresh("s1"), _fresh("s2")]
+
+    with app.app_context():
+        user = db.session.get(User, ids["user_id"])
+        account = db.session.get(UplynkAccount, ids["account_id"])
+        with patch(
+            "app.slicers.service.UplynkDiscoveryClient.list_slicers",
+            return_value=fresh_list,
+        ):
+            result = poll_account_slicer_states(user, account)
+
+        # s3 is still in the returned list (with stale data), so the template
+        # can render its last-known badge.
+        by_id = {s.slicer_id: s for s in result}
+        assert by_id["s1"].last_state == "Slicing"
+        assert by_id["s2"].last_state == "Slicing"
+        assert by_id["s3"].last_state == "Stopped"
+        assert by_id["s3"].last_seen_at is None

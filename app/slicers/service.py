@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from flask import current_app
 
 from app.crypto import decrypt
-from app.models import AuditEvent, Slicer, User, db
+from app.models import AuditEvent, Slicer, UplynkAccount, User, db
 from app.uplynk.csl import SLICER_METHODS, CSLError, CSLResult, call_slicer
-from app.uplynk.discovery import UplynkAPIError, UplynkDiscoveryClient
+from app.uplynk.discovery import (
+    DiscoveredSlicer,
+    UplynkAPIError,
+    UplynkDiscoveryClient,
+)
 from app.uplynk.target_state import (
     TARGET_STATE_METHODS,
     TargetStateResult,
@@ -147,12 +152,31 @@ def _record_and_return(
     return ControlOutcome(result=result, error=error, audit_event_id=event.id)
 
 
+def _apply_fresh_state(slicer: Slicer, fresh: DiscoveredSlicer) -> bool:
+    """Apply fresh state to a slicer row if anything changed.
+
+    Returns True if the row was modified (caller must commit), False if the
+    fresh values match what's already on the row (caller can skip the write).
+
+    Only `last_state` and `connection_mode` drive the change decision; when
+    they're unchanged we skip touching `last_seen_at` too, so an unchanged
+    poll produces no DB write at all (see #15).
+    """
+    if slicer.last_state == fresh.state and slicer.connection_mode == fresh.connection_mode:
+        return False
+    slicer.last_state = fresh.state
+    slicer.connection_mode = fresh.connection_mode
+    slicer.last_seen_at = datetime.now(UTC)
+    return True
+
+
 def poll_slicer_state(user: User, slicer: Slicer) -> Slicer:
     """Fetch the slicer's current state from Uplynk and persist it.
 
     Uses the v4 retrieve endpoint (scoped-key JWT auth, orthogonal to the
     SHA1-signed control endpoints). Updates last_state, connection_mode, and
-    last_seen_at on the row, commits, and returns the refreshed Slicer.
+    last_seen_at on the row if any of them changed, commits, and returns the
+    refreshed Slicer. No-op polls skip the commit entirely (see #15).
 
     Raises SlicerAccessDenied if the user isn't permitted to view this slicer.
     Raises UplynkAPIError on Uplynk-side failures — caller decides how to render.
@@ -175,16 +199,76 @@ def poll_slicer_state(user: User, slicer: Slicer) -> Slicer:
 
     fresh = client.retrieve_slicer(slicer.slicer_id)
 
-    from datetime import UTC, datetime
-
     # last_state uses the v4 retrieve vocabulary (see app.uplynk.states).
     # The SHA1 control /state endpoint uses a different vocabulary that only
     # lands in AuditEvent.response_snippet — never rendered as a badge.
-    slicer.last_state = fresh.state
-    slicer.connection_mode = fresh.connection_mode
-    slicer.last_seen_at = datetime.now(UTC)
-    db.session.commit()
+    if _apply_fresh_state(slicer, fresh):
+        db.session.commit()
     return slicer
+
+
+def poll_account_slicer_states(user: User, account: UplynkAccount) -> list[Slicer]:
+    """Fetch all slicer states for one account in a single Uplynk call.
+
+    Replaces N per-slicer `retrieve_slicer()` calls with one `list_slicers()`
+    call, then applies change-detection per slicer (see #15) so unchanged
+    polls produce zero DB writes. One commit per poll regardless of slicer
+    count.
+
+    Access control mirrors the per-slicer path: admins see every active
+    slicer on the account; regular users see only the subset they're
+    assigned to. Slicers Uplynk didn't return in the list response are
+    still included in the returned list with their existing (stale) row
+    data — the badge template will render whatever we last saw, matching
+    the single-slicer path's stale-on-error behavior.
+
+    Raises SlicerAccessDenied if the user has no visible slicers on this
+    account and isn't admin.
+    Raises UplynkAPIError on Uplynk-side failures — caller decides how to
+    render.
+    """
+    if user.is_admin:
+        visible = [s for s in account.slicers if s.is_active]
+    else:
+        assigned_ids = {s.id for s in user.slicers}
+        visible = [s for s in account.slicers if s.is_active and s.id in assigned_ids]
+
+    if not visible:
+        raise SlicerAccessDenied(
+            f"User {user.email} has no assigned slicers on account {account.label!r}"
+        )
+
+    if not account.has_scoped_key:
+        raise UplynkAPIError(
+            f"Account {account.label!r} has no scoped API key — cannot poll states"
+        )
+
+    private_b64 = decrypt(account.scoped_private_b64_encrypted)
+    client = UplynkDiscoveryClient(
+        api_base=current_app.config["UPLYNK_API_BASE"],
+        kid=account.scoped_kid,
+        sub=account.scoped_sub,
+        private_b64=private_b64,
+        scp=account.scoped_scp,
+    )
+
+    fresh_by_id: dict[str, DiscoveredSlicer] = {f.slicer_id: f for f in client.list_slicers()}
+
+    any_changed = False
+    for slicer in visible:
+        fresh = fresh_by_id.get(slicer.slicer_id)
+        if fresh is None:
+            # Uplynk didn't return this one — leave the row untouched so the
+            # badge renders whatever we last saw, matching poll_slicer_state's
+            # stale-on-error behavior.
+            continue
+        if _apply_fresh_state(slicer, fresh):
+            any_changed = True
+
+    if any_changed:
+        db.session.commit()
+
+    return visible
 
 
 def set_target_state(
