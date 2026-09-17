@@ -1,0 +1,23 @@
+# =============================================================================
+# csl-slicer-console — local self-hosted overlay
+# =============================================================================
+# For running your own instance outside the author's homelab: no dependency
+# on the `auth-net` external network or a Caddy reverse proxy. Builds the
+# production image and publishes it directly on a host port.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#   curl http://localhost:5050/health
+# -----------------------------------------------------------------------------
+
+services:
+  csl-slicer-console:
+    image: csl-slicer-console:local
+    ports:
+      - "${WEB_PORT:-5050}:5000"
+
+networks:
+  web:
+    external: false
+    driver: bridge
+    name: csl-slicer-console_local
