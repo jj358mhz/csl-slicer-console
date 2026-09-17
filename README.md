@@ -124,8 +124,7 @@ git clone https://github.com/jj358mhz/csl-slicer-console.git
 cd csl-slicer-console
 cp .env.example .env
 
-# Build once, then use that image to generate secrets — no host
-# Python/uv required, just Docker.
+# Build once, then generate secrets from that image
 docker build -t csl-slicer-console:local .
 docker run --rm --entrypoint python csl-slicer-console:local -c "import secrets; print(secrets.token_urlsafe(32))"   # SECRET_KEY
 docker run --rm --entrypoint python csl-slicer-console:local -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # FERNET_KEY
