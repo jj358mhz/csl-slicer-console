@@ -72,7 +72,7 @@ only)*.
 | `audit_events`    | Slicer control history (per-user history + admin filters) |
 | `admin_events`    | User / account / slicer CRUD + sync events                |
 
-## 🧑‍💻 Local development
+## 🧑‍💻 Developing on this repo
 
 Prerequisites: Docker Desktop, [uv](https://docs.astral.sh/uv/), Python 3.12.
 
