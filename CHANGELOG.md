@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-17
+
+### ✨ Added
+- `docker-compose.local.yml` overlay and a new README "Running your own
+  instance" section for self-hosting outside the author's homelab — plain
+  bridge network and a published host port instead of the `auth-net`
+  external network the production compose file assumes. (#25)
+
+---
+
 ## [1.5.0] - 2026-09-13
 
 ### ♻️ Changed

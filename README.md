@@ -108,6 +108,39 @@ uv run ruff check .
 uv run ruff format .
 ```
 
+## 🏠 Running your own instance
+
+Want to self-host this for your own team — no Caddy, no Portainer, no
+dependency on the author's `auth-net` homelab network? Use the
+`docker-compose.local.yml` overlay, which publishes the port directly on a
+plain bridge network instead.
+
+```bash
+git clone git@github.com:jj358mhz/csl-slicer-console.git
+cd csl-slicer-console
+
+# Copy env template and fill in real secrets
+cp .env.example .env
+uv run python -c "import secrets; print(secrets.token_urlsafe(32))"   # SECRET_KEY
+uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # FERNET_KEY
+# Also set your own BOOTSTRAP_ADMIN_EMAIL / BOOTSTRAP_ADMIN_PASSWORD in .env
+
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+
+curl http://localhost:5050/health
+```
+
+Log in at `http://localhost:5050` with the bootstrap admin credentials from
+`.env` (only used on first run, while the `users` table is empty). The
+environment variables are the same ones documented in **Production
+deployment** below; reset an admin password with the same `docker exec`
+one-liner shown there.
+
+Want your own domain and TLS? Put the container behind your own reverse
+proxy (Caddy, nginx, Traefik, ...) — the overlay just gets you a working
+instance reachable at `http://localhost:5050`; exposing it beyond your LAN
+is up to you.
+
 ## 🚢 Production deployment
 
 Runs as a Portainer-managed stack pulling directly from this repo:
@@ -223,7 +256,8 @@ csl-slicer-console/
 ├── tests/                      # Pytest suite
 ├── .github/workflows/          # CI + deploy
 ├── docker-compose.yml          # Production stack
-├── docker-compose.dev.yml      # Local dev overlay
+├── docker-compose.dev.yml      # Local dev overlay (hot-reload)
+├── docker-compose.local.yml    # Self-host overlay (no auth-net/Caddy dep)
 ├── Dockerfile                  # Multi-stage build (uv → runtime)
 ├── entrypoint.sh               # Runs migrations then gunicorn
 ├── gunicorn.conf.py
