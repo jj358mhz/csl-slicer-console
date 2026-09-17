@@ -1,7 +1,9 @@
 # =============================================================================
 # Deploy to Utility Pi
 # =============================================================================
-# Triggered on every push to main.
+# Triggered on every push to main, on pushing a version tag (so `git describe`
+# resolves to a clean vN.N.N once the release tag lands after the merge), or
+# manually via workflow_dispatch (e.g. `gh workflow run deploy.yml`).
 # SSHes into the Utility Pi, pulls the latest commit, rebuilds and restarts
 # the csl-slicer-console Docker container.
 
@@ -11,6 +13,9 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 jobs:
   deploy:
