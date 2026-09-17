@@ -115,15 +115,21 @@ dependency on the author's `auth-net` homelab network? Use the
 `docker-compose.local.yml` overlay, which publishes the port directly on a
 plain bridge network instead.
 
+Prerequisite: **Docker only** — this path doesn't need `uv` or a host
+Python install (those are only for the dev workflow above). Secrets get
+generated from the built image itself.
+
 ```bash
 git clone git@github.com:jj358mhz/csl-slicer-console.git
 cd csl-slicer-console
-
-# Copy env template and fill in real secrets
 cp .env.example .env
-uv run python -c "import secrets; print(secrets.token_urlsafe(32))"   # SECRET_KEY
-uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # FERNET_KEY
-# Also set your own BOOTSTRAP_ADMIN_EMAIL / BOOTSTRAP_ADMIN_PASSWORD in .env
+
+# Build once, then use that image to generate secrets — no host
+# Python/uv required, just Docker.
+docker build -t csl-slicer-console:local .
+docker run --rm --entrypoint python csl-slicer-console:local -c "import secrets; print(secrets.token_urlsafe(32))"   # SECRET_KEY
+docker run --rm --entrypoint python csl-slicer-console:local -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # FERNET_KEY
+# Paste both into .env, along with your own BOOTSTRAP_ADMIN_EMAIL / BOOTSTRAP_ADMIN_PASSWORD
 
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 
