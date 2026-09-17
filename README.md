@@ -120,7 +120,7 @@ Python install (those are only for the dev workflow above). Secrets get
 generated from the built image itself.
 
 ```bash
-git clone git@github.com:jj358mhz/csl-slicer-console.git
+git clone https://github.com/jj358mhz/csl-slicer-console.git
 cd csl-slicer-console
 cp .env.example .env
 
