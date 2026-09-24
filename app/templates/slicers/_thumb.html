@@ -1,0 +1,17 @@
+{# Slicer live thumbnail. Rendered inline at page load; also re-rendered as
+   an OOB fragment by the polling routes. Callers that want the OOB variant
+   include with `oob=True`. Hidden entirely when the slicer has no thumb_url
+   (idle/stopped, or Uplynk hasn't returned one yet). #}
+<div id="thumb-{{ s.id }}"
+     class="slicer-card__thumb"
+     {%- if not s.thumb_url %} hidden{% endif %}
+     {%- if oob %} hx-swap-oob="true"{% endif %}>
+    {% if s.thumb_url %}
+        {# The proxy URL is stable per slicer, but the underlying image
+           changes almost every poll while live — append a hash of the
+           upstream thumb_url as a cache-busting token so the browser
+           doesn't serve a stale frame for an unchanged-looking <img src>. #}
+        <img src="{{ url_for('slicers.thumb', slicer_id=s.id) }}?v={{ s.thumb_version }}"
+             alt="" loading="lazy">
+    {% endif %}
+</div>

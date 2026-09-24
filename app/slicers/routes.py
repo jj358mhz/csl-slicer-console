@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from flask import Blueprint, abort, render_template, request
+import requests
+from flask import Blueprint, Response, abort, render_template, request
 from flask_login import current_user, login_required
 
 from app.models import Slicer, UplynkAccount, db
@@ -12,6 +13,7 @@ from app.slicers.service import (
     poll_account_slicer_states,
     poll_slicer_state,
     set_target_state,
+    user_can_control,
 )
 from app.uplynk.csl import SLICER_METHODS
 from app.uplynk.discovery import UplynkAPIError
@@ -82,6 +84,33 @@ def state(slicer_id: int):
         pass
 
     return render_template("slicers/_state.html", s=slicer)
+
+
+@bp.route("/<int:slicer_id>/thumb", methods=["GET"])
+@login_required
+def thumb(slicer_id: int):
+    """GET /slicers/<id>/thumb — proxies the slicer's live thumbnail image.
+
+    Uplynk serves thumb_url over plain HTTP; fetching it server-side and
+    streaming the bytes back avoids mixed-content blocking on an
+    HTTPS-served console and keeps the raw Uplynk CDN URL off the page.
+    """
+    slicer = db.session.get(Slicer, slicer_id)
+    if slicer is None or not slicer.thumb_url:
+        abort(404)
+    if not user_can_control(current_user, slicer):
+        abort(403)
+
+    try:
+        upstream = requests.get(slicer.thumb_url, timeout=5)
+        upstream.raise_for_status()
+    except requests.RequestException:
+        abort(502)
+
+    return Response(
+        upstream.content,
+        mimetype=upstream.headers.get("Content-Type", "image/jpeg"),
+    )
 
 
 @bp.route("/accounts/<int:account_id>/slicer-states", methods=["GET"])
