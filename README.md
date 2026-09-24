@@ -22,10 +22,12 @@ control buttons, and full audit trails.
   `/api/v4/ingest/cloud-slicers/live/slicers`. Manual slicer CRUD available
   for accounts without a scoped key.
 - 🎛️ **HTMX dashboard** — slicers grouped by workspace with live state
-  pills (Slicing / AdBreak / Blackout / Stopped). Four action buttons per
-  card, inline JSON results, no page reload. **Collapsible workspace
-  sections** with per-workspace persistence, sticky chip nav for jumping
-  between workspaces, and slicer counts per section.
+  pills (Slicing / AdBreak / Blackout / Stopped) and a live thumbnail
+  preview next to each name so you can confirm a slicer is actually
+  receiving video at a glance. Four action buttons per card, inline JSON
+  results, no page reload. **Collapsible workspace sections** with
+  per-workspace persistence, sticky chip nav for jumping between
+  workspaces, and slicer counts per section.
 - ✅ **Batch operations** — checkbox per card, section select-all, floating
   action bar, parallel fire against selected slicers, confirmation modal
   for destructive multi-slicer actions.
