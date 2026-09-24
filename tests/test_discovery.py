@@ -109,6 +109,25 @@ def test_discovered_slicer_missing_optional_fields():
     ds = DiscoveredSlicer.from_api({"id": "s1", "slicer_api_url": "u"})
     assert ds.region is None
     assert ds.plugin_id is None
+    assert ds.thumb_url is None
+
+
+def test_discovered_slicer_parses_thumb_url():
+    item = {**SAMPLE_ITEM, "thumb_url": "http://cf.cdn.uplynk.com/slices/upl123.jpg"}
+    ds = DiscoveredSlicer.from_api(item)
+    assert ds.thumb_url == "http://cf.cdn.uplynk.com/slices/upl123.jpg"
+
+
+def test_discovered_slicer_thumb_url_absent_is_none():
+    ds = DiscoveredSlicer.from_api(SAMPLE_ITEM)
+    assert ds.thumb_url is None
+
+
+def test_discovered_slicer_thumb_url_empty_string_becomes_none():
+    """Uplynk shouldn't send an empty thumb_url, but normalize it if it does."""
+    item = {**SAMPLE_ITEM, "thumb_url": ""}
+    ds = DiscoveredSlicer.from_api(item)
+    assert ds.thumb_url is None
 
 
 def test_list_slicers_success(ec_keypair):

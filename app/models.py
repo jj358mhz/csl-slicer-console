@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 
 from flask_sqlalchemy import SQLAlchemy
@@ -121,6 +122,7 @@ class Slicer(Base):
     # "push" | "pull" | None — meaningful for SRT, absent for other protocols.
     connection_mode: Mapped[str | None] = mapped_column(String(10), nullable=True)
     last_state: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    thumb_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_manual: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -134,6 +136,19 @@ class Slicer(Base):
     uplynk_account: Mapped[UplynkAccount] = relationship(back_populates="slicers")
     users: Mapped[list[User]] = relationship(secondary="user_slicers", back_populates="slicers")
     audit_events: Mapped[list[AuditEvent]] = relationship(back_populates="slicer")
+
+    @property
+    def thumb_version(self) -> str | None:
+        """Cache-busting token for the thumbnail proxy's <img src>.
+
+        Derived from the full thumb_url rather than assuming its filename is
+        unique per frame — Uplynk's real URLs happen to end in an
+        incrementing filename, but that's an upstream implementation detail
+        we shouldn't rely on for correctness.
+        """
+        if not self.thumb_url:
+            return None
+        return hashlib.md5(self.thumb_url.encode()).hexdigest()[:10]
 
     def __repr__(self) -> str:
         return f"<Slicer {self.slicer_id}>"

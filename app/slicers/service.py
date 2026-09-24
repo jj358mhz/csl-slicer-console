@@ -158,16 +158,23 @@ def _apply_fresh_state(slicer: Slicer, fresh: DiscoveredSlicer) -> bool:
     Returns True if the row was modified (caller must commit), False if the
     fresh values match what's already on the row (caller can skip the write).
 
-    Only `last_state` and `connection_mode` drive the change decision; when
-    they're unchanged we skip touching `last_seen_at` too, so an unchanged
-    poll produces no DB write at all (see #15).
+    `last_state`/`connection_mode` changes gate `last_seen_at`; a bare
+    `thumb_url` change does not, since it doesn't reflect the slicer having
+    been freshly "seen" in the same sense. Note this still means most polls
+    of an actively-slicing slicer write to the DB, because Uplynk hands back
+    a new thumbnail on nearly every poll (see #28) — the #15 no-op-skip
+    optimization mainly holds for idle/steady-state slicers now.
     """
-    if slicer.last_state == fresh.state and slicer.connection_mode == fresh.connection_mode:
-        return False
-    slicer.last_state = fresh.state
-    slicer.connection_mode = fresh.connection_mode
-    slicer.last_seen_at = datetime.now(UTC)
-    return True
+    changed = False
+    if slicer.last_state != fresh.state or slicer.connection_mode != fresh.connection_mode:
+        slicer.last_state = fresh.state
+        slicer.connection_mode = fresh.connection_mode
+        slicer.last_seen_at = datetime.now(UTC)
+        changed = True
+    if slicer.thumb_url != fresh.thumb_url:
+        slicer.thumb_url = fresh.thumb_url
+        changed = True
+    return changed
 
 
 def poll_slicer_state(user: User, slicer: Slicer) -> Slicer:

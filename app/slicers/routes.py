@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from flask import Blueprint, abort, render_template, request
+import time
+
+import requests
+from flask import Blueprint, Response, abort, render_template, request
 from flask_login import current_user, login_required
 
 from app.models import Slicer, UplynkAccount, db
@@ -12,12 +15,22 @@ from app.slicers.service import (
     poll_account_slicer_states,
     poll_slicer_state,
     set_target_state,
+    user_can_control,
 )
 from app.uplynk.csl import SLICER_METHODS
 from app.uplynk.discovery import UplynkAPIError
 from app.uplynk.target_state import TARGET_STATE_METHODS
 
 bp = Blueprint("slicers", __name__, url_prefix="/slicers")
+
+# In-process cache for the thumbnail proxy: {slicer_id: (thumb_url, content,
+# content_type, fetched_at)}. Collapses duplicate upstream fetches when
+# multiple viewers poll the same slicer within the same short window — real
+# thumbnails regenerate every few seconds, so there's no point re-fetching
+# more often than that. Per-worker-process only (not shared across gunicorn
+# workers); a shared cache would be the next step if worker count grows.
+_THUMB_CACHE: dict[int, tuple[str, bytes, str, float]] = {}
+_THUMB_CACHE_TTL_SECONDS = 8
 
 
 @bp.route("/<int:slicer_id>/control", methods=["POST"])
@@ -82,6 +95,40 @@ def state(slicer_id: int):
         pass
 
     return render_template("slicers/_state.html", s=slicer)
+
+
+@bp.route("/<int:slicer_id>/thumb", methods=["GET"])
+@login_required
+def thumb(slicer_id: int):
+    """GET /slicers/<id>/thumb — proxies the slicer's live thumbnail image.
+
+    Uplynk serves thumb_url over plain HTTP; fetching it server-side and
+    streaming the bytes back avoids mixed-content blocking on an
+    HTTPS-served console and keeps the raw Uplynk CDN URL off the page.
+    """
+    slicer = db.session.get(Slicer, slicer_id)
+    if slicer is None or not slicer.thumb_url:
+        abort(404)
+    if not user_can_control(current_user, slicer):
+        abort(403)
+
+    now = time.monotonic()
+    cached = _THUMB_CACHE.get(slicer_id)
+    if cached is not None:
+        cached_url, content, content_type, fetched_at = cached
+        if cached_url == slicer.thumb_url and (now - fetched_at) < _THUMB_CACHE_TTL_SECONDS:
+            return Response(content, mimetype=content_type)
+
+    try:
+        upstream = requests.get(slicer.thumb_url, timeout=5)
+        upstream.raise_for_status()
+    except requests.RequestException:
+        abort(502)
+
+    content_type = upstream.headers.get("Content-Type", "image/jpeg")
+    _THUMB_CACHE[slicer_id] = (slicer.thumb_url, upstream.content, content_type, now)
+
+    return Response(upstream.content, mimetype=content_type)
 
 
 @bp.route("/accounts/<int:account_id>/slicer-states", methods=["GET"])

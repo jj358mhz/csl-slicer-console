@@ -1,6 +1,7 @@
 {# Polling response for the single-slicer route: both the badge and the
    meta line swap via hx-swap-oob so the caller doesn't need a target. #}
 {% with oob=True %}{% include 'slicers/_badge.html' %}{% endwith %}
+{% with oob=True %}{% include 'slicers/_thumb.html' %}{% endwith %}
 <div id="meta-{{ s.id }}" class="slicer-card__meta" hx-swap-oob="true">
     {% include 'slicers/_meta.html' %}
 </div>

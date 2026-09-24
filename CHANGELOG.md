@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-23
+
+### ✨ Added
+- Live thumbnail previews on slicer tiles — a small preview image next to
+  the slicer name, sourced from Uplynk's `thumb_url`, so you can glance at
+  a tile and confirm a live slicer is actually receiving video. Refreshes
+  in place via the existing 30s HTMX poll, same as the state badge. Served
+  through a backend proxy (Uplynk returns the URL over plain `http://`,
+  which an HTTPS-served console can't embed directly) with a short
+  in-process cache to collapse duplicate fetches from concurrent viewers.
+  Closes [#28](https://github.com/jj358mhz/csl-slicer-console/issues/28).
+
+---
+
 ## [1.6.0] - 2026-09-17
 
 ### ✨ Added

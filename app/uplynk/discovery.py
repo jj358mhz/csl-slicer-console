@@ -35,6 +35,7 @@ class DiscoveredSlicer:
     state: str | None
     description: str | None
     connection_mode: str | None  # "push" | "pull" | None. Only meaningful for SRT.
+    thumb_url: str | None = None  # Live preview image, present while a source is connected.
 
     @classmethod
     def from_api(cls, item: dict[str, Any]) -> DiscoveredSlicer:
@@ -50,6 +51,7 @@ class DiscoveredSlicer:
             state=status.get("state"),
             description=item.get("description"),
             connection_mode=item.get("connection_mode"),
+            thumb_url=item.get("thumb_url") or None,
         )
 
 
