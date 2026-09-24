@@ -11,6 +11,7 @@ from app.crypto import encrypt
 from app.models import AuditEvent, Slicer, UplynkAccount, User, db
 from app.slicers.service import (
     SlicerAccessDenied,
+    _apply_fresh_state,
     control_slicer,
     poll_account_slicer_states,
 )
@@ -105,7 +106,7 @@ def _mk_account_scene(app, *, n_slicers=3, admin=False, assign_first_n=None):
         }
 
 
-def _fresh(slicer_id, state="Slicing", connection_mode="pull"):
+def _fresh(slicer_id, state="Slicing", connection_mode="pull", thumb_url=None):
     return DiscoveredSlicer(
         slicer_id=slicer_id,
         slicer_api_url=f"https://ingest.example.com/{slicer_id}",
@@ -116,6 +117,7 @@ def _fresh(slicer_id, state="Slicing", connection_mode="pull"):
         state=state,
         description=None,
         connection_mode=connection_mode,
+        thumb_url=thumb_url,
     )
 
 
@@ -526,3 +528,114 @@ def test_poll_account_states_missing_from_fresh_leaves_row_untouched(app):
         assert by_id["s2"].last_state == "Slicing"
         assert by_id["s3"].last_state == "Stopped"
         assert by_id["s3"].last_seen_at is None
+
+
+# ---------------------------------------------------------------------------
+# _apply_fresh_state — thumb_url change detection (see #28)
+# ---------------------------------------------------------------------------
+
+
+def _row(last_state="Slicing", connection_mode="pull", thumb_url=None):
+    """An unpersisted Slicer row for direct _apply_fresh_state unit tests."""
+    return Slicer(
+        uplynk_account_id=1,
+        slicer_id="s1",
+        slicer_api_url="https://ingest.example.com/s1",
+        last_state=last_state,
+        connection_mode=connection_mode,
+        thumb_url=thumb_url,
+    )
+
+
+def test_apply_fresh_state_no_change_returns_false():
+    slicer = _row(thumb_url="http://cdn.example.com/a.jpg")
+    fresh = _fresh("s1", thumb_url="http://cdn.example.com/a.jpg")
+    changed = _apply_fresh_state(slicer, fresh)
+    assert changed is False
+    assert slicer.last_seen_at is None
+
+
+def test_apply_fresh_state_thumb_only_change_is_applied_but_does_not_touch_last_seen_at():
+    """A thumb-only change still gets written, but shouldn't count as a fresh
+    'seen' event the way a real state/connection_mode change does — see the
+    #15/#28 tradeoff noted in _apply_fresh_state's docstring."""
+    slicer = _row(thumb_url="http://cdn.example.com/a.jpg")
+    fresh = _fresh("s1", thumb_url="http://cdn.example.com/b.jpg")
+    changed = _apply_fresh_state(slicer, fresh)
+    assert changed is True
+    assert slicer.thumb_url == "http://cdn.example.com/b.jpg"
+    assert slicer.last_seen_at is None
+
+
+def test_apply_fresh_state_state_change_updates_last_seen_at():
+    slicer = _row(last_state="Stopped", thumb_url="http://cdn.example.com/a.jpg")
+    fresh = _fresh("s1", state="Slicing", thumb_url="http://cdn.example.com/a.jpg")
+    changed = _apply_fresh_state(slicer, fresh)
+    assert changed is True
+    assert slicer.last_state == "Slicing"
+    assert slicer.last_seen_at is not None
+
+
+def test_apply_fresh_state_thumb_becomes_none_hides_it():
+    slicer = _row(thumb_url="http://cdn.example.com/a.jpg")
+    fresh = _fresh("s1", thumb_url=None)
+    changed = _apply_fresh_state(slicer, fresh)
+    assert changed is True
+    assert slicer.thumb_url is None
+
+
+def test_poll_account_states_writes_thumb_change_even_when_state_unchanged(app):
+    """A thumb-only change during steady state still lands in the DB on the
+    next poll, even though it doesn't gate the #15 no-op-skip the way
+    last_state/connection_mode do."""
+    ids = _mk_account_scene(app, n_slicers=1, admin=True)
+
+    with app.app_context():
+        user = db.session.get(User, ids["user_id"])
+        account = db.session.get(UplynkAccount, ids["account_id"])
+
+        with patch(
+            "app.slicers.service.UplynkDiscoveryClient.list_slicers",
+            return_value=[_fresh("s1", thumb_url="http://cdn.example.com/a.jpg")],
+        ):
+            poll_account_slicer_states(user, account)
+
+        seen_after_first = db.session.get(Slicer, ids["slicer_ids"][0]).last_seen_at
+        assert seen_after_first is not None
+
+        # Same state/connection_mode, but a new thumb — simulates a live
+        # slicer handing back a fresh frame on nearly every poll.
+        with patch(
+            "app.slicers.service.UplynkDiscoveryClient.list_slicers",
+            return_value=[_fresh("s1", thumb_url="http://cdn.example.com/b.jpg")],
+        ):
+            poll_account_slicer_states(user, account)
+
+        slicer = db.session.get(Slicer, ids["slicer_ids"][0])
+        assert slicer.thumb_url == "http://cdn.example.com/b.jpg"
+        # last_seen_at is untouched by a thumb-only change.
+        assert slicer.last_seen_at == seen_after_first
+
+
+# ---------------------------------------------------------------------------
+# Slicer.thumb_version — cache-busting token for the <img src> (see #28)
+# ---------------------------------------------------------------------------
+
+
+def test_thumb_version_none_when_no_thumb_url():
+    assert _row(thumb_url=None).thumb_version is None
+
+
+def test_thumb_version_stable_for_same_url():
+    a = _row(thumb_url="http://cdn.example.com/a.jpg")
+    b = _row(thumb_url="http://cdn.example.com/a.jpg")
+    assert a.thumb_version == b.thumb_version
+
+
+def test_thumb_version_differs_when_only_the_url_tail_differs():
+    """Regression guard: an earlier version derived the token from just the
+    URL's filename, which broke when two different frames happened to share
+    a filename-shaped tail (as in mock/test URLs) — see #28."""
+    a = _row(thumb_url="http://cdn.example.com/seed/one/640/360.jpg")
+    b = _row(thumb_url="http://cdn.example.com/seed/two/640/360.jpg")
+    assert a.thumb_version != b.thumb_version

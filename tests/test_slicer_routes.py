@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import requests
 
 from app.auth.passwords import hash_password
 from app.crypto import encrypt
@@ -149,7 +151,7 @@ def _make_slicer_with_scoped_key(app):
         return slicer.id
 
 
-def _fresh(slicer_id="s1", state="Slicing", connection_mode="pull"):
+def _fresh(slicer_id="s1", state="Slicing", connection_mode="pull", thumb_url=None):
     return DiscoveredSlicer(
         slicer_id=slicer_id,
         slicer_api_url=f"https://ingest.example.com/{slicer_id}",
@@ -160,6 +162,7 @@ def _fresh(slicer_id="s1", state="Slicing", connection_mode="pull"):
         state=state,
         description=None,
         connection_mode=connection_mode,
+        thumb_url=thumb_url,
     )
 
 
@@ -185,6 +188,31 @@ def test_state_returns_badge_fragment(app, client):
     # OOB meta swap includes push/pull qualifier
     assert b"SRT pull" in response.data
     assert b'hx-swap-oob="true"' in response.data
+
+
+def test_state_includes_hidden_oob_thumb_when_no_thumb_url(app, client):
+    _login(client)
+    slicer_id = _make_slicer_with_scoped_key(app)
+    with patch(
+        "app.uplynk.discovery.UplynkDiscoveryClient.retrieve_slicer",
+        return_value=_fresh(state="Stopped", thumb_url=None),
+    ):
+        response = client.get(f"/slicers/{slicer_id}/state")
+    assert response.status_code == 200
+    assert f'id="thumb-{slicer_id}"'.encode() in response.data
+    assert b"hidden" in response.data
+
+
+def test_state_includes_visible_oob_thumb_when_thumb_url_present(app, client):
+    _login(client)
+    slicer_id = _make_slicer_with_scoped_key(app)
+    with patch(
+        "app.uplynk.discovery.UplynkDiscoveryClient.retrieve_slicer",
+        return_value=_fresh(state="Slicing", thumb_url="http://cdn.example.com/frame.jpg"),
+    ):
+        response = client.get(f"/slicers/{slicer_id}/state")
+    assert response.status_code == 200
+    assert f"/slicers/{slicer_id}/thumb?v=".encode() in response.data
 
 
 def test_state_persists_fresh_data(app, client):
@@ -514,3 +542,103 @@ def test_account_states_makes_single_uplynk_call(app, client):
         client.get(f"/slicers/accounts/{account_id}/slicer-states")
 
     assert mock_list.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Thumbnail proxy route (see #28)
+# ---------------------------------------------------------------------------
+
+
+def _make_slicer_with_thumb(app, thumb_url="http://cdn.example.com/frame.jpg"):
+    with app.app_context():
+        acct = UplynkAccount(
+            label="Acct",
+            workspace_id="ws",
+            legacy_api_key_encrypted=encrypt("legacy-key"),
+        )
+        db.session.add(acct)
+        db.session.flush()
+        slicer = Slicer(
+            uplynk_account_id=acct.id,
+            slicer_id="s1",
+            slicer_api_url="https://ingest.example.com/s1",
+            is_active=True,
+            thumb_url=thumb_url,
+        )
+        db.session.add(slicer)
+        db.session.commit()
+        return slicer.id
+
+
+def _mock_upstream_image(status_code=200, content=b"\xff\xd8\xff", content_type="image/jpeg"):
+    mock = MagicMock()
+    mock.status_code = status_code
+    mock.content = content
+    mock.headers = {"Content-Type": content_type}
+    mock.raise_for_status = MagicMock()
+    return mock
+
+
+def test_thumb_requires_login(app, client):
+    slicer_id = _make_slicer_with_thumb(app)
+    response = client.get(f"/slicers/{slicer_id}/thumb", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/auth/login" in response.headers["Location"]
+
+
+def test_thumb_unknown_slicer_returns_404(app, client):
+    _login(client)
+    response = client.get("/slicers/99999/thumb")
+    assert response.status_code == 404
+
+
+def test_thumb_slicer_without_thumb_url_returns_404(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    response = client.get(f"/slicers/{slicer_id}/thumb")
+    assert response.status_code == 404
+
+
+def test_thumb_regular_user_denied_on_unassigned_slicer(app, client):
+    slicer_id = _make_slicer_with_thumb(app)
+    with app.app_context():
+        u = User(
+            email="ru@example.com",
+            password_hash=hash_password("password123"),
+        )
+        db.session.add(u)
+        db.session.commit()
+    _login(client, "ru@example.com", "password123")
+    response = client.get(f"/slicers/{slicer_id}/thumb")
+    assert response.status_code == 403
+
+
+def test_thumb_proxies_upstream_bytes(app, client):
+    _login(client)
+    slicer_id = _make_slicer_with_thumb(app, thumb_url="http://cdn.example.com/frame.jpg")
+    upstream = _mock_upstream_image(content=b"fake-jpeg-bytes", content_type="image/jpeg")
+    with patch("app.slicers.routes.requests.get", return_value=upstream) as mock_get:
+        response = client.get(f"/slicers/{slicer_id}/thumb")
+
+    mock_get.assert_called_once_with("http://cdn.example.com/frame.jpg", timeout=5)
+    assert response.status_code == 200
+    assert response.content_type == "image/jpeg"
+    assert response.data == b"fake-jpeg-bytes"
+
+
+def test_thumb_upstream_failure_returns_502(app, client):
+    _login(client)
+    slicer_id = _make_slicer_with_thumb(app)
+    with patch("app.slicers.routes.requests.get", side_effect=requests.RequestException("boom")):
+        response = client.get(f"/slicers/{slicer_id}/thumb")
+    assert response.status_code == 502
+
+
+def test_thumb_upstream_non_2xx_returns_502(app, client):
+    _login(client)
+    slicer_id = _make_slicer_with_thumb(app)
+    upstream = _mock_upstream_image(status_code=404)
+    upstream.raise_for_status.side_effect = requests.HTTPError("404")
+    with patch("app.slicers.routes.requests.get", return_value=upstream):
+        response = client.get(f"/slicers/{slicer_id}/thumb")
+    assert response.status_code == 502
