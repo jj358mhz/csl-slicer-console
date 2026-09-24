@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock, patch
 
+import pytest
 import requests
 
 from app.auth.passwords import hash_password
@@ -11,6 +13,18 @@ from app.crypto import encrypt
 from app.models import AuditEvent, Slicer, UplynkAccount, User, db
 from app.uplynk.csl import CSLResult
 from app.uplynk.discovery import DiscoveredSlicer, UplynkAPIError
+
+
+@pytest.fixture(autouse=True)
+def _clear_thumb_cache():
+    """The thumb proxy's in-process cache is module-level state, shared
+    across tests unless cleared — different tests can otherwise reuse the
+    same slicer id + thumb_url and see a stale cached response."""
+    from app.slicers.routes import _THUMB_CACHE
+
+    _THUMB_CACHE.clear()
+    yield
+    _THUMB_CACHE.clear()
 
 
 def _login(client, email="test@example.com", password="test-password-123"):
@@ -642,3 +656,58 @@ def test_thumb_upstream_non_2xx_returns_502(app, client):
     with patch("app.slicers.routes.requests.get", return_value=upstream):
         response = client.get(f"/slicers/{slicer_id}/thumb")
     assert response.status_code == 502
+
+
+def test_thumb_second_request_within_ttl_uses_cache(app, client):
+    """Concurrent viewers polling the same slicer shouldn't each trigger a
+    fresh upstream fetch — see #28."""
+    _login(client)
+    slicer_id = _make_slicer_with_thumb(app)
+    upstream = _mock_upstream_image(content=b"frame-a")
+    with patch("app.slicers.routes.requests.get", return_value=upstream) as mock_get:
+        r1 = client.get(f"/slicers/{slicer_id}/thumb")
+        r2 = client.get(f"/slicers/{slicer_id}/thumb")
+
+    assert mock_get.call_count == 1
+    assert r1.data == b"frame-a"
+    assert r2.data == b"frame-a"
+
+
+def test_thumb_cache_bypassed_when_thumb_url_changes(app, client):
+    """A genuinely new frame (new thumb_url) is never served from a stale cache."""
+    _login(client)
+    slicer_id = _make_slicer_with_thumb(app, thumb_url="http://cdn.example.com/a.jpg")
+    upstream_a = _mock_upstream_image(content=b"frame-a")
+    with patch("app.slicers.routes.requests.get", return_value=upstream_a):
+        client.get(f"/slicers/{slicer_id}/thumb")
+
+    with app.app_context():
+        s = db.session.get(Slicer, slicer_id)
+        s.thumb_url = "http://cdn.example.com/b.jpg"
+        db.session.commit()
+
+    upstream_b = _mock_upstream_image(content=b"frame-b")
+    with patch("app.slicers.routes.requests.get", return_value=upstream_b) as mock_get:
+        response = client.get(f"/slicers/{slicer_id}/thumb")
+
+    mock_get.assert_called_once_with("http://cdn.example.com/b.jpg", timeout=5)
+    assert response.data == b"frame-b"
+
+
+def test_thumb_cache_expires_after_ttl(app, client):
+    _login(client)
+    slicer_id = _make_slicer_with_thumb(app)
+    upstream = _mock_upstream_image(content=b"frame-a")
+    with patch("app.slicers.routes.requests.get", return_value=upstream) as mock_get:
+        client.get(f"/slicers/{slicer_id}/thumb")
+
+    import app.slicers.routes as routes_mod
+
+    with (
+        patch.object(routes_mod.time, "monotonic", return_value=time.monotonic() + 999),
+        patch("app.slicers.routes.requests.get", return_value=upstream) as mock_get_2,
+    ):
+        client.get(f"/slicers/{slicer_id}/thumb")
+
+    assert mock_get.call_count == 1
+    assert mock_get_2.call_count == 1
