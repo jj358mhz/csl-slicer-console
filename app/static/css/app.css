@@ -836,14 +836,15 @@ form.inline {
     border-color: var(--text-faint);
 }
 
+/* Blackout — purple, matching the .badge--state--blackout pill. */
 .button--action--blackout {
-    border-color: rgba(224, 82, 82, 0.4);
-    color: #f39a9a;
+    border-color: rgba(149, 71, 243, 0.5);
+    color: #c9a6fa;
 }
 
 .button--action--blackout:hover {
-    background: rgba(224, 82, 82, 0.12);
-    border-color: var(--error);
+    background: rgba(149, 71, 243, 0.15);
+    border-color: #9547F3;
     color: #fff;
 }
 
@@ -1299,7 +1300,7 @@ form.inline {
     color: #fff;
 }
 
-/* Stop — red, destructive. Same treatment as blackout. */
+/* Stop — red, destructive. */
 .button--action--stop {
     border-color: rgba(224, 82, 82, 0.4);
     color: #f39a9a;
