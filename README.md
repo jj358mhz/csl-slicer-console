@@ -24,8 +24,9 @@ control buttons, and full audit trails.
 - 🎛️ **HTMX dashboard** — slicers grouped by workspace with live state
   pills (Slicing / AdBreak / Blackout / Stopped) and a live thumbnail
   preview next to each name so you can confirm a slicer is actually
-  receiving video at a glance. Four action buttons per card, inline JSON
-  results, no page reload. **Collapsible workspace sections** with
+  receiving video at a glance. Six color-coded action buttons per card
+  (Blackout matches its purple state pill; Start / Content Start green;
+  Stop red), inline JSON results, no page reload. **Collapsible workspace sections** with
   per-workspace persistence, sticky chip nav for jumping between
   workspaces, and slicer counts per section.
 - ✅ **Batch operations** — checkbox per card, section select-all, floating

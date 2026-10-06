@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-06
+
+### ♻️ Changed
+- Blackout action button is now purple, matching the Blackout state badge
+  (`#9547F3`), instead of sharing Stop's red treatment. Applies to both the
+  per-tile button and the batch toolbar button.
+  ([#30](https://github.com/jj358mhz/csl-slicer-console/pull/30))
+
+### 📚 Docs
+- README dashboard highlight corrected from four to six action buttons per
+  card (Start/Stop were added in 1.4.0) and notes the color coding.
+
+---
+
 ## [1.7.0] - 2026-09-23
 
 ### ✨ Added
