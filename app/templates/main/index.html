@@ -2,6 +2,8 @@
 {% block title_suffix %} — Dashboard{% endblock %}
 
 {% block content %}
+    {# Actions that change what viewers see — gated behind the confirm modal. #}
+    {% set confirm_methods = ['content_start', 'blackout', 'start', 'stop'] %}
     <div class="page-header">
         <h1>Slicers</h1>
         <div class="page-header__controls">
@@ -72,7 +74,8 @@
                                           hx-target="#result-{{ s.id }}"
                                           hx-swap="innerHTML"
                                           hx-indicator="#spinner-{{ s.id }}-{{ method }}"
-                                          class="inline">
+                                          class="inline"
+                                          {% if method in confirm_methods %}data-confirm-method="{{ method }}"{% endif %}>
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <input type="hidden" name="method" value="{{ method }}">
                                         <input type="hidden" name="dry_run" value="0" class="dry-run-flag">
@@ -102,17 +105,17 @@
                 <button type="button" class="button button--action" data-batch-method="status">Status</button>
                 <button type="button" class="button button--action" data-batch-method="state">State</button>
                 <button type="button" class="button button--action button--action--content_start"
-                        data-batch-method="content_start">Content Start
+                        data-batch-method="content_start" data-confirm-method="content_start">Content Start
                 </button>
                 <button type="button" class="button button--action button--action--blackout"
-                        data-batch-method="blackout">
+                        data-batch-method="blackout" data-confirm-method="blackout">
                     Blackout
                 </button>
                 <button type="button" class="button button--action button--action--start"
-                        data-batch-method="start">Start
+                        data-batch-method="start" data-confirm-method="start">Start
                 </button>
                 <button type="button" class="button button--action button--action--stop"
-                        data-batch-method="stop">Stop
+                        data-batch-method="stop" data-confirm-method="stop">Stop
                 </button>
             </div>
             <button type="button" id="batch-clear" class="link-button">Clear selection</button>
@@ -121,7 +124,8 @@
         {# Confirmation modal #}
         <div id="confirm-modal" class="modal" hidden>
             <div class="modal__backdrop"></div>
-            <div class="modal__panel">
+            <div class="modal__panel" role="alertdialog" aria-modal="true"
+                 aria-labelledby="confirm-title" aria-describedby="confirm-body">
                 <h2 class="modal__title" id="confirm-title">Confirm action</h2>
                 <p class="modal__body" id="confirm-body"></p>
                 <div class="modal__actions">
@@ -365,16 +369,27 @@
                 const modalOk = document.getElementById('confirm-ok');
                 const modalCancel = document.getElementById('confirm-cancel');
 
-                function askConfirm(title, body) {
+                const modalBackdrop = modal.querySelector('.modal__backdrop');
+
+                function askConfirm(title, body, method) {
                     return new Promise(resolve => {
+                        const opener = document.activeElement;
                         modalTitle.textContent = title;
                         modalBody.textContent = body;
+                        // Tint the Confirm button to match the action being confirmed.
+                        modalOk.className = 'button button--primary';
+                        if (method) modalOk.classList.add(`button--confirm--${method}`);
                         modal.hidden = false;
+                        // Default focus on Cancel so a stray Enter doesn't fire the action.
+                        modalCancel.focus();
 
                         function done(v) {
                             modal.hidden = true;
                             modalOk.removeEventListener('click', ok);
                             modalCancel.removeEventListener('click', cancel);
+                            modalBackdrop.removeEventListener('click', cancel);
+                            document.removeEventListener('keydown', onKey, true);
+                            if (opener && typeof opener.focus === 'function') opener.focus();
                             resolve(v);
                         }
 
@@ -386,29 +401,76 @@
                             done(false);
                         }
 
+                        function onKey(e) {
+                            if (e.key === 'Escape') {
+                                e.preventDefault();
+                                cancel();
+                            } else if (e.key === 'Tab') {
+                                // Keep focus inside the dialog.
+                                e.preventDefault();
+                                (document.activeElement === modalOk ? modalCancel : modalOk).focus();
+                            }
+                        }
+
                         modalOk.addEventListener('click', ok);
                         modalCancel.addEventListener('click', cancel);
+                        modalBackdrop.addEventListener('click', cancel);
+                        document.addEventListener('keydown', onKey, true);
                     });
                 }
 
-                // ---- Batch fire ----
-                const DESTRUCTIVE = new Set(['content_start', 'blackout', 'stop']);
+                // What each confirmed action does, shown in the dialog body.
+                const CONFIRM_DESCRIPTIONS = {
+                    start: 'This starts the slicer.',
+                    stop: 'This stops the slicer. It will stop sending live video until it is started again.',
+                    blackout: 'Viewers will see blackout instead of the live feed until Content Start is sent.',
+                    content_start: 'This starts a new content segment and ends any blackout or ad break.',
+                };
 
-                async function fireBatch(method) {
+                function methodLabel(method) {
+                    return method.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+                }
+
+                function isDryRun() {
+                    return Boolean(dryRunCb && dryRunCb.checked);
+                }
+
+                // ---- Per-tile confirm ----
+                // Tile action forms are htmx-driven; htmx:confirm fires before every
+                // request, so we hold the request until the user answers the modal.
+                document.body.addEventListener('htmx:confirm', function (e) {
+                    const form = e.detail.elt;
+                    const method = form && form.dataset ? form.dataset.confirmMethod : null;
+                    if (!method || isDryRun()) return;
+                    e.preventDefault();
+                    const name = form.closest('.slicer-card').dataset.slicerName;
+                    askConfirm(
+                        `${methodLabel(method)} slicer ${name}?`,
+                        `${CONFIRM_DESCRIPTIONS[method]} This is not a dry-run.`,
+                        method
+                    ).then(ok => {
+                        if (ok) e.detail.issueRequest(true);
+                    });
+                });
+
+                // ---- Batch fire ----
+                async function fireBatch(method, needsConfirm) {
                     const selected = Array.from(document.querySelectorAll('.slicer-checkbox:checked'));
                     if (selected.length === 0) return;
 
-                    const dryRun = dryRunCb && dryRunCb.checked;
+                    const dryRun = isDryRun();
 
-                    if (DESTRUCTIVE.has(method) && !dryRun && selected.length > 1) {
+                    if (needsConfirm && !dryRun) {
                         const names = selected
                             .map(cb => cb.closest('.slicer-card').dataset.slicerName)
                             .slice(0, 5)
                             .join(', ');
                         const extra = selected.length > 5 ? `, and ${selected.length - 5} more` : '';
+                        const target = selected.length === 1 ? `slicer ${names}` : `${selected.length} slicers`;
                         const ok = await askConfirm(
-                            `${method.replace('_', ' ')} on ${selected.length} slicers?`,
-                            `This will fire ${method} against: ${names}${extra}. This is not a dry-run.`
+                            `${methodLabel(method)} ${target}?`,
+                            `${CONFIRM_DESCRIPTIONS[method]} Fires against: ${names}${extra}. This is not a dry-run.`,
+                            method
                         );
                         if (!ok) return;
                     }
@@ -453,7 +515,7 @@
 
                 document.querySelectorAll('[data-batch-method]').forEach(btn => {
                     btn.addEventListener('click', function () {
-                        fireBatch(btn.dataset.batchMethod);
+                        fireBatch(btn.dataset.batchMethod, Boolean(btn.dataset.confirmMethod));
                     });
                 });
 
