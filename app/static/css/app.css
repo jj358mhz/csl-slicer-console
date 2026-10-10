@@ -1007,6 +1007,38 @@ form.inline {
     gap: 10px;
 }
 
+.modal__actions .button--link:focus-visible {
+    outline: 2px solid var(--text-faint);
+    outline-offset: 2px;
+}
+
+/* Confirm button tinted to match the action being confirmed. */
+.button--confirm--blackout {
+    background: #9547F3;
+}
+
+.button--confirm--blackout:hover {
+    background: #a868f5;
+}
+
+.button--confirm--stop {
+    background: var(--error);
+}
+
+.button--confirm--stop:hover {
+    background: #e86f6f;
+}
+
+.button--confirm--start,
+.button--confirm--content_start {
+    background: #16a34a;
+}
+
+.button--confirm--start:hover,
+.button--confirm--content_start:hover {
+    background: var(--success);
+}
+
 
 /* ==========================================================================
    19 · Dashboard nav & collapsible sections

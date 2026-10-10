@@ -138,6 +138,21 @@ def test_dashboard_renders_control_buttons(app, client):
     assert b"hx-post" in response.data
 
 
+def test_dashboard_marks_state_changing_actions_for_confirmation(app, client):
+    _login(client)
+    _make_slicer(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    # Start / Stop / Content Start / Blackout are gated behind the confirm
+    # modal, both on the slicer tile and in the batch bar (one of each).
+    for method in ["content_start", "blackout", "start", "stop"]:
+        assert response.data.count(f'data-confirm-method="{method}"'.encode()) == 2
+    # Read-only methods fire without a prompt.
+    for method in ["status", "state"]:
+        assert f'data-confirm-method="{method}"'.encode() not in response.data
+    assert b'id="confirm-modal"' in response.data
+
+
 def _make_slicer_with_scoped_key(app):
     """Slicer whose account has a scoped key configured — needed for poll tests."""
     with app.app_context():

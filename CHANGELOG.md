@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-10
+
+### ✨ Added
+- Confirmation dialog before **Start**, **Stop**, **Content Start**, and
+  **Blackout** on the individual slicer tile buttons, which previously fired
+  immediately. The dialog names the slicer and explains what the action does.
+  Status and State still fire without a prompt, and dry-run mode skips the
+  dialog. Closes [#31](https://github.com/jj358mhz/csl-slicer-console/issues/31).
+
+### ♻️ Changed
+- Batch-bar confirmation now covers **Start** too, and applies when a single
+  slicer is selected (previously it only prompted for 2+ slicers).
+- The confirmation dialog is keyboard-accessible: focus starts on Cancel,
+  Tab stays inside the dialog, Esc or a backdrop click cancels, and focus
+  returns to the button that opened it. The Confirm button is tinted to
+  match the action (purple Blackout, red Stop, green Start / Content Start).
+
+---
+
 ## [1.7.1] - 2026-10-06
 
 ### ♻️ Changed
