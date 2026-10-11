@@ -39,11 +39,30 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: 2222
+          # Well under the job's timeout-minutes, so a hung remote command fails
+          # as a clear ssh-action timeout instead of a silent job cancel.
+          command_timeout: 5m
           script: |
             set -e
             cd ~/git/csl-slicer-console
-            git fetch --tags --force
-            git pull origin main
+            # The Pi -> GitHub SSH connection occasionally stalls, and neither
+            # git nor ssh time out by default, so a fetch could hang until the
+            # job was cancelled (#37). Bound each attempt and retry.
+            export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+            for attempt in 1 2 3; do
+              if timeout 60 git fetch --tags --force; then
+                break
+              fi
+              if [ "$attempt" = 3 ]; then
+                echo "git fetch failed after 3 attempts" >&2
+                exit 1
+              fi
+              echo "git fetch attempt $attempt failed or timed out; retrying in 5s"
+              sleep 5
+            done
+            # Fast-forward from the refs just fetched rather than `git pull`,
+            # which would make a second (unbounded) round-trip to GitHub.
+            git merge --ff-only origin/main
             export APP_VERSION="$(git describe --tags --always --dirty)"
             echo "Building version: $APP_VERSION"
             APP_VERSION="$APP_VERSION" docker compose up -d --build
