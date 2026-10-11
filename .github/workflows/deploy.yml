@@ -17,6 +17,14 @@ on:
       - "v*"
   workflow_dispatch:
 
+# One deploy at a time. A release pushes main (merge) and then a tag within
+# seconds; without this both runs `docker compose up` on the Pi at once and
+# the second fails with a container-name conflict. Queue instead of cancel so
+# the tag deploy still runs afterwards and picks up the clean `git describe`.
+concurrency:
+  group: deploy-utility-pi
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: SSH deploy
