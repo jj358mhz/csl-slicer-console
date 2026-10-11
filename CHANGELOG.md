@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-10-10
+
+### 🐛 Fixed
+- After **Start** (or **Stop**), the badge stayed on its old state until the
+  next 30s poll, so a fast startup could skip past **Initializing** without
+  it ever showing (e.g. a `start_blackout` slicer going Stopped →
+  Initializing → Blackout inside one poll window). A successful, non-dry-run
+  Start/Stop, from a tile or the batch bar, now polls that slicer every
+  second until it leaves Stopped (start) or reaches Stopped (stop), for up
+  to 2 minutes. Once it's Initializing, the badge's own 1s poll takes over.
+  Closes [#39](https://github.com/jj358mhz/csl-slicer-console/issues/39).
+
+### ♻️ Changed
+- **Blackout** badges now pulse too (purple glow), alongside Initializing and
+  Slicing.
+
+---
+
 ## [1.9.0] - 2026-10-10
 
 ### ✨ Added

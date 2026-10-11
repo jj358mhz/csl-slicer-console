@@ -453,6 +453,58 @@
                     });
                 });
 
+                // ---- Watch a slicer through Start / Stop ----
+                // The control response doesn't refresh the badge, and the 30s
+                // workspace poll can miss a short Initializing window entirely
+                // (e.g. Stopped -> Initializing -> Blackout). After a successful
+                // Start/Stop, poll that one slicer every second until it leaves
+                // Stopped (start) or reaches Stopped (stop). Once it's
+                // Initializing, the badge's own 1s poll takes over. Tracked per
+                // card in JS so a workspace-poll badge swap can't cancel it.
+                const WATCH_INTERVAL_MS = 1000;
+                const WATCH_LIMIT_MS = 120000;
+                const watching = new Map();  // slicerId -> watch token
+
+                function badgeState(slicerId) {
+                    const badge = document.getElementById(`badge-${slicerId}`);
+                    return badge ? badge.textContent.trim() : null;
+                }
+
+                function stillTransitioning(method, state) {
+                    return method === 'start' ? state === 'Stopped' : state !== 'Stopped';
+                }
+
+                async function watchSlicer(slicerId, method) {
+                    const token = {};
+                    watching.set(slicerId, token);  // a newer Start/Stop supersedes this one
+                    const deadline = Date.now() + WATCH_LIMIT_MS;
+                    const card = document.getElementById(`slicer-${slicerId}`);
+                    while (watching.get(slicerId) === token && Date.now() < deadline) {
+                        try {
+                            await htmx.ajax('GET', `/slicers/${slicerId}/state`, {source: card, swap: 'none'});
+                        } catch (_) { /* transient; try again next tick */
+                        }
+                        if (!stillTransitioning(method, badgeState(slicerId))) break;
+                        await new Promise(r => setTimeout(r, WATCH_INTERVAL_MS));
+                    }
+                    if (watching.get(slicerId) === token) watching.delete(slicerId);
+                }
+
+                function maybeWatch(card, method, dryRun) {
+                    if (dryRun || (method !== 'start' && method !== 'stop')) return;
+                    if (!card.querySelector('.slicer-card__result .result--ok')) return;
+                    watchSlicer(card.dataset.slicerId, method);
+                }
+
+                // Tile buttons (htmx forms)
+                document.body.addEventListener('htmx:afterSettle', function (e) {
+                    const form = e.detail.requestConfig && e.detail.requestConfig.elt;
+                    if (!form || !form.matches || !form.matches('.slicer-card__actions form')) return;
+                    const method = form.querySelector('input[name="method"]').value;
+                    const dryRun = form.querySelector('.dry-run-flag').value === '1';
+                    maybeWatch(form.closest('.slicer-card'), method, dryRun);
+                });
+
                 // ---- Batch fire ----
                 async function fireBatch(method, needsConfirm) {
                     const selected = Array.from(document.querySelectorAll('.slicer-checkbox:checked'));
@@ -501,6 +553,7 @@
                             .then(res => {
                                 if (res.ok) {
                                     resultEl.innerHTML = res.html;
+                                    maybeWatch(card, method, dryRun);
                                 } else {
                                     resultEl.innerHTML = `<div class="result result--error"><div class="result__title">${method} — HTTP ${res.status}</div></div>`;
                                 }
