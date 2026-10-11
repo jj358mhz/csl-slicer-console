@@ -23,7 +23,7 @@ control buttons, and full audit trails.
   for accounts without a scoped key.
 - 🎛️ **HTMX dashboard** — slicers grouped by workspace with live state
   pills (Slicing / AdBreak / Blackout / Initializing / Stopped; Slicing,
-  Blackout and Initializing pulse, and a starting slicer refreshes every
+  Blackout, Initializing and Stopping pulse, and a starting slicer refreshes every
   second) and a live thumbnail
   preview next to each name so you can confirm a slicer is actually
   receiving video at a glance. Six color-coded action buttons per card

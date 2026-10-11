@@ -558,13 +558,14 @@ form.inline {
     font-weight: 700;
 }
 
-/* Live / blacked-out / starting-up pills pulse so they stand out at a glance. A soft glow
+/* Live / blacked-out / starting-up / stopping pills pulse so they stand out at a glance. A soft glow
    rather than a hard flash (well under 3 flashes/sec). The dashboard JS pins
    each badge's animation to the page clock so the pulse doesn't restart
    every time a poll swaps the badge. */
 .badge--state--initializing,
 .badge--state--slicing,
-.badge--state--blackout {
+.badge--state--blackout,
+.badge--state--stopping {
     --pulse-color: rgba(95, 184, 95, 0.75);
     animation: badge-pulse 1.6s ease-in-out infinite;
 }
@@ -575,6 +576,11 @@ form.inline {
 
 .badge--state--blackout {
     --pulse-color: rgba(149, 71, 243, 0.8);
+}
+
+/* Stopping keeps the default grey pill; only the glow is added. */
+.badge--state--stopping {
+    --pulse-color: rgba(255, 255, 255, 0.35);
 }
 
 @keyframes badge-pulse {
@@ -591,7 +597,8 @@ form.inline {
 @media (prefers-reduced-motion: reduce) {
     .badge--state--initializing,
     .badge--state--slicing,
-    .badge--state--blackout {
+    .badge--state--blackout,
+    .badge--state--stopping {
         animation: none;
     }
 }
