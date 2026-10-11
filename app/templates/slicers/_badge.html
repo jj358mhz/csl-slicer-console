@@ -4,10 +4,10 @@
 {% set state_slug = (s.last_state or 'unknown') | lower | replace(' ', '') %}
 <span id="badge-{{ s.id }}"
       class="badge badge--state badge--state--{{ state_slug }}"
-      {#- While starting up, poll this one slicer every second. Each response
-          swaps in a fresh badge, so the timer dies with the old element and
-          fast polling stops on its own once the state moves on. -#}
-      {%- if s.last_state == 'Initializing' %}
+      {#- While starting up or stopping, poll this one slicer every second.
+          Each response swaps in a fresh badge, so the timer dies with the old
+          element and fast polling stops on its own once the state moves on. -#}
+      {%- if s.last_state in ('Initializing', 'Stopping') %}
       hx-get="{{ url_for('slicers.state', slicer_id=s.id) }}"
       hx-trigger="every 1s"
       hx-swap="none"

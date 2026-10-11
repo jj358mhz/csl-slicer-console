@@ -459,8 +459,9 @@
                 // (e.g. Stopped -> Initializing -> Blackout). After a successful
                 // Start/Stop, poll that one slicer every second until it leaves
                 // Stopped (start) or reaches Stopped (stop). Once it's
-                // Initializing, the badge's own 1s poll takes over. Tracked per
-                // card in JS so a workspace-poll badge swap can't cancel it.
+                // Initializing / Stopping, the badge's own 1s poll takes over.
+                // Tracked per card in JS so a workspace-poll badge swap can't
+                // cancel it.
                 const WATCH_INTERVAL_MS = 1000;
                 const WATCH_LIMIT_MS = 120000;
                 const watching = new Map();  // slicerId -> watch token
@@ -471,7 +472,8 @@
                 }
 
                 function stillTransitioning(method, state) {
-                    return method === 'start' ? state === 'Stopped' : state !== 'Stopped';
+                    if (method === 'start') return state === 'Stopped';
+                    return state !== 'Stopped' && state !== 'Stopping';
                 }
 
                 async function watchSlicer(slicerId, method) {
@@ -490,9 +492,101 @@
                     if (watching.get(slicerId) === token) watching.delete(slicerId);
                 }
 
+                // ---- State timeline in the result panel ----
+                // After a Start/Stop, list each state the badge shows, when it
+                // was first seen, and how long it stayed. Built from badge
+                // swaps (so ~1s accurate while fast-polling); lives until the
+                // next action replaces the result panel.
+                const timelines = new Map();  // slicerId -> {method, el, entries}
+
+                function hhmmss(t) {
+                    return new Date(t).toLocaleTimeString([], {hour12: false});
+                }
+
+                function fmtDwell(ms) {
+                    const sec = Math.max(0, Math.round(ms / 1000));
+                    return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`;
+                }
+
+                function timelineSettled(tl) {
+                    const last = tl.entries[tl.entries.length - 1].state;
+                    return tl.method === 'start'
+                        ? !['Stopped', 'Initializing'].includes(last)
+                        : last === 'Stopped';
+                }
+
+                function renderTimeline(tl) {
+                    const now = Date.now();
+                    const settled = timelineSettled(tl);
+                    const rows = tl.entries.map((e, i) => {
+                        const next = tl.entries[i + 1];
+                        const isLast = !next;
+                        const row = document.createElement('li');
+                        row.className = 'result__timeline-row' + (e.state ? '' : ' result__timeline-row--action');
+                        let dwell = '';
+                        if (e.state && next) dwell = fmtDwell(next.t - e.t);
+                        else if (e.state && isLast && !settled) dwell = fmtDwell(now - e.t) + '…';
+                        [e.label, hhmmss(e.t), dwell].forEach(text => {
+                            const cell = document.createElement('span');
+                            cell.textContent = text;
+                            row.appendChild(cell);
+                        });
+                        return row;
+                    });
+                    // Skip no-op re-renders (most ticks once settled).
+                    const html = rows.map(r => r.outerHTML).join('');
+                    if (html !== tl.html) {
+                        tl.html = html;
+                        tl.el.replaceChildren(...rows);
+                    }
+                }
+
+                function startTimeline(card, method) {
+                    const panel = card.querySelector('.slicer-card__result .result--ok');
+                    if (!panel) return;
+                    const el = document.createElement('ol');
+                    el.className = 'result__timeline';
+                    const title = panel.querySelector('.result__title');
+                    title ? title.after(el) : panel.prepend(el);
+                    const now = Date.now();
+                    const slicerId = card.dataset.slicerId;
+                    const tl = {
+                        method, el, entries: [
+                            {label: `${methodLabel(method)} OK`, state: null, t: now},
+                            {label: badgeState(slicerId), state: badgeState(slicerId), t: now},
+                        ]
+                    };
+                    timelines.set(slicerId, tl);
+                    renderTimeline(tl);
+                }
+
+                function updateTimelines() {
+                    timelines.forEach((tl, slicerId) => {
+                        if (!tl.el.isConnected) {  // result panel replaced by a newer action
+                            timelines.delete(slicerId);
+                            return;
+                        }
+                        const state = badgeState(slicerId);
+                        const last = tl.entries[tl.entries.length - 1];
+                        if (state && state !== last.state) {
+                            tl.entries.push({label: state, state, t: Date.now()});
+                        }
+                        renderTimeline(tl);
+                    });
+                }
+
+                // Badge swaps land via htmx (OOB); re-check after each one, and
+                // tick once a second so the current state's dwell counts up.
+                // (Not a MutationObserver: rendering the timeline is itself a
+                // DOM change and would re-trigger it endlessly.)
+                document.body.addEventListener('htmx:oobAfterSwap', updateTimelines);
+                document.body.addEventListener('htmx:afterSettle', updateTimelines);
+                setInterval(updateTimelines, 1000);
+
                 function maybeWatch(card, method, dryRun) {
                     if (dryRun || (method !== 'start' && method !== 'stop')) return;
                     if (!card.querySelector('.slicer-card__result .result--ok')) return;
+                    startTimeline(card, method);
                     watchSlicer(card.dataset.slicerId, method);
                 }
 

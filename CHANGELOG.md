@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-10
+
+### ✨ Added
+- **State timeline in the Start/Stop result panel.** After a successful
+  Start or Stop, the result panel lists each state the slicer passes
+  through, the local time it was first seen, and how long it stayed
+  (e.g. `Slicing 2s → Stopping 4s → Stopped`). The current state's time
+  counts up live. Built client-side from the 1s badge refresh, so accurate
+  to about a second; nothing is stored.
+  Closes [#45](https://github.com/jj358mhz/csl-slicer-console/issues/45).
+
+### ♻️ Changed
+- **Stopping** now gets the same 1s badge refresh as Initializing, so
+  Stopping → Stopped shows promptly even when the stop came from outside the
+  console. The Stop watch hands off to it, as Start does at Initializing,
+  so a slicer never gets more than one request per second.
+
+---
+
 ## [1.9.3] - 2026-10-10
 
 ### ♻️ Changed
