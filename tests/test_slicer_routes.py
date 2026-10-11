@@ -159,12 +159,13 @@ def _set_last_state(app, slicer_id, state):
         db.session.commit()
 
 
-def test_initializing_badge_fast_polls_its_slicer(app, client):
+@pytest.mark.parametrize("state", ["Initializing", "Stopping"])
+def test_transitional_badge_fast_polls_its_slicer(app, client, state):
     _login(client)
     slicer_id = _make_slicer(app)
-    _set_last_state(app, slicer_id, "Initializing")
+    _set_last_state(app, slicer_id, state)
     response = client.get("/")
-    assert b"badge--state--initializing" in response.data
+    assert f"badge--state--{state.lower()}".encode() in response.data
     assert f'hx-get="/slicers/{slicer_id}/state"'.encode() in response.data
     assert b'hx-trigger="every 1s"' in response.data
 
