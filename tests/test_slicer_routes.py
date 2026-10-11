@@ -153,6 +153,32 @@ def test_dashboard_marks_state_changing_actions_for_confirmation(app, client):
     assert b'id="confirm-modal"' in response.data
 
 
+def _set_last_state(app, slicer_id, state):
+    with app.app_context():
+        db.session.get(Slicer, slicer_id).last_state = state
+        db.session.commit()
+
+
+def test_initializing_badge_fast_polls_its_slicer(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _set_last_state(app, slicer_id, "Initializing")
+    response = client.get("/")
+    assert b"badge--state--initializing" in response.data
+    assert f'hx-get="/slicers/{slicer_id}/state"'.encode() in response.data
+    assert b'hx-trigger="every 1s"' in response.data
+
+
+@pytest.mark.parametrize("state", ["Slicing", "Ready", "Blackout", "Stopped", None])
+def test_non_initializing_badge_does_not_fast_poll(app, client, state):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _set_last_state(app, slicer_id, state)
+    response = client.get("/")
+    assert f'hx-get="/slicers/{slicer_id}/state"'.encode() not in response.data
+    assert b'hx-trigger="every 1s"' not in response.data
+
+
 def _make_slicer_with_scoped_key(app):
     """Slicer whose account has a scoped key configured — needed for poll tests."""
     with app.app_context():

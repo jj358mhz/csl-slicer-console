@@ -22,7 +22,8 @@ control buttons, and full audit trails.
   `/api/v4/ingest/cloud-slicers/live/slicers`. Manual slicer CRUD available
   for accounts without a scoped key.
 - 🎛️ **HTMX dashboard** — slicers grouped by workspace with live state
-  pills (Slicing / AdBreak / Blackout / Stopped) and a live thumbnail
+  pills (Slicing / AdBreak / Blackout / Initializing / Stopped; Slicing and
+  Initializing pulse, and Initializing refreshes every second) and a live thumbnail
   preview next to each name so you can confirm a slicer is actually
   receiving video at a glance. Six color-coded action buttons per card
   (Blackout matches its purple state pill; Start / Content Start green;
