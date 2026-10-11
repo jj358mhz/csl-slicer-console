@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-10-10
+
+### ♻️ Changed
+- **Ready** state badge is now solid green (`#58b263`) with dark text,
+  instead of the plain grey fallback. It does not pulse.
+  Closes [#41](https://github.com/jj358mhz/csl-slicer-console/issues/41).
+
+---
+
 ## [1.9.1] - 2026-10-10
 
 ### 🐛 Fixed
