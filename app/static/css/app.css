@@ -543,6 +543,45 @@ form.inline {
     font-weight: 700;
 }
 
+.badge--state--initializing {
+    background: #d4aa3c;
+    color: #18181a;
+    border-color: #d4aa3c;
+    font-weight: 700;
+}
+
+/* Live / starting-up pills pulse so they stand out at a glance. A soft glow
+   rather than a hard flash (well under 3 flashes/sec). The dashboard JS pins
+   each badge's animation to the page clock so the pulse doesn't restart
+   every time a poll swaps the badge. */
+.badge--state--initializing,
+.badge--state--slicing {
+    --pulse-color: rgba(95, 184, 95, 0.75);
+    animation: badge-pulse 1.6s ease-in-out infinite;
+}
+
+.badge--state--initializing {
+    --pulse-color: rgba(212, 170, 60, 0.8);
+}
+
+@keyframes badge-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 transparent;
+        filter: brightness(1);
+    }
+    50% {
+        box-shadow: 0 0 10px 2px var(--pulse-color);
+        filter: brightness(1.2);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .badge--state--initializing,
+    .badge--state--slicing {
+        animation: none;
+    }
+}
+
 
 /* ==========================================================================
    11. Tabs

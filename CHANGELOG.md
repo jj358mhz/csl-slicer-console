@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-10
+
+### ✨ Added
+- **Initializing** state badge is now mustard (`#d4aa3c`) with dark text,
+  instead of the plain grey fallback.
+- While a slicer is **Initializing**, its tile refreshes every second (via
+  the single-slicer state route) until it moves to Slicing, Ready,
+  Blackout, or any other state, then drops back to the 30s workspace poll.
+  Closes [#33](https://github.com/jj358mhz/csl-slicer-console/issues/33).
+- **Initializing** and **Slicing** badges pulse with a soft glow (1.6s
+  cycle) so live and starting-up slicers stand out. The pulse is pinned
+  to the page clock, so poll swaps don't restart it, and it is turned off
+  under `prefers-reduced-motion`.
+
+---
+
 ## [1.8.0] - 2026-10-10
 
 ### ✨ Added
