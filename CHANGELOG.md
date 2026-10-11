@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-10
+
+### ✨ Added
+- **Blackout** and **Content Start** now get the same 1s follow-up as
+  Start/Stop: after a successful console action, the slicer is polled every
+  second until the badge reads Blackout / Slicing (capped at 30s), and the
+  result panel shows the state timeline with dwell times. Previously the
+  badge kept its old state until the next 30s poll.
+  Closes [#47](https://github.com/jj358mhz/csl-slicer-console/issues/47).
+
+### ♻️ Changed
+- If a followed action never reaches its expected state before the cap,
+  the timeline's live counter freezes instead of counting up forever.
+
+---
+
 ## [1.10.0] - 2026-10-10
 
 ### ✨ Added

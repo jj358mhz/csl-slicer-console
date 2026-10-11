@@ -25,7 +25,7 @@ control buttons, and full audit trails.
   pills (Slicing / AdBreak / Blackout / Initializing / Stopped; Slicing,
   Blackout, Initializing and Stopping pulse, and a starting or stopping slicer
   refreshes every second, with a state timeline and dwell times in the
-  Start/Stop result) and a live thumbnail
+  Start / Stop / Blackout / Content Start result) and a live thumbnail
   preview next to each name so you can confirm a slicer is actually
   receiving video at a glance. Six color-coded action buttons per card
   (Blackout matches its purple state pill; Start / Content Start green;

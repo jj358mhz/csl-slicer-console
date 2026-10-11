@@ -453,17 +453,40 @@
                     });
                 });
 
-                // ---- Watch a slicer through Start / Stop ----
+                // ---- Follow a slicer after a state-changing action ----
                 // The control response doesn't refresh the badge, and the 30s
-                // workspace poll can miss a short Initializing window entirely
-                // (e.g. Stopped -> Initializing -> Blackout). After a successful
-                // Start/Stop, poll that one slicer every second until it leaves
-                // Stopped (start) or reaches Stopped (stop). Once it's
-                // Initializing / Stopping, the badge's own 1s poll takes over.
-                // Tracked per card in JS so a workspace-poll badge swap can't
-                // cancel it.
+                // workspace poll can miss a short window entirely (e.g.
+                // Stopped -> Initializing -> Blackout). After a successful
+                // action, poll that one slicer every second until keepPolling()
+                // says stop. Start/Stop hand off once the badge reaches
+                // Initializing / Stopping, whose own 1s poll takes over.
+                // settled() ends the timeline's live dwell counter. Tracked
+                // per card in JS so a workspace-poll badge swap can't cancel it.
                 const WATCH_INTERVAL_MS = 1000;
-                const WATCH_LIMIT_MS = 120000;
+                const FOLLOW = {
+                    start: {
+                        limitMs: 120000,
+                        keepPolling: s => s === 'Stopped',
+                        settled: s => !['Stopped', 'Initializing'].includes(s),
+                    },
+                    stop: {
+                        limitMs: 120000,
+                        keepPolling: s => s !== 'Stopped' && s !== 'Stopping',
+                        settled: s => s === 'Stopped',
+                    },
+                    // Near-instant transitions: shorter cap, in case Uplynk never
+                    // reports the expected state (e.g. the slicer isn't live).
+                    blackout: {
+                        limitMs: 30000,
+                        keepPolling: s => s !== 'Blackout',
+                        settled: s => s === 'Blackout',
+                    },
+                    content_start: {
+                        limitMs: 30000,
+                        keepPolling: s => s !== 'Slicing',
+                        settled: s => s === 'Slicing',
+                    },
+                };
                 const watching = new Map();  // slicerId -> watch token
 
                 function badgeState(slicerId) {
@@ -471,29 +494,30 @@
                     return badge ? badge.textContent.trim() : null;
                 }
 
-                function stillTransitioning(method, state) {
-                    if (method === 'start') return state === 'Stopped';
-                    return state !== 'Stopped' && state !== 'Stopping';
-                }
-
                 async function watchSlicer(slicerId, method) {
                     const token = {};
-                    watching.set(slicerId, token);  // a newer Start/Stop supersedes this one
-                    const deadline = Date.now() + WATCH_LIMIT_MS;
+                    watching.set(slicerId, token);  // a newer action supersedes this one
+                    const follow = FOLLOW[method];
+                    const deadline = Date.now() + follow.limitMs;
                     const card = document.getElementById(`slicer-${slicerId}`);
                     while (watching.get(slicerId) === token && Date.now() < deadline) {
                         try {
                             await htmx.ajax('GET', `/slicers/${slicerId}/state`, {source: card, swap: 'none'});
                         } catch (_) { /* transient; try again next tick */
                         }
-                        if (!stillTransitioning(method, badgeState(slicerId))) break;
+                        if (!follow.keepPolling(badgeState(slicerId))) break;
                         await new Promise(r => setTimeout(r, WATCH_INTERVAL_MS));
                     }
-                    if (watching.get(slicerId) === token) watching.delete(slicerId);
+                    if (watching.get(slicerId) !== token) return;
+                    watching.delete(slicerId);
+                    // Gave up without reaching the expected state: freeze the
+                    // timeline's live counter rather than let it run forever.
+                    const tl = timelines.get(slicerId);
+                    if (tl && Date.now() >= deadline) tl.gaveUp = true;
                 }
 
                 // ---- State timeline in the result panel ----
-                // After a Start/Stop, list each state the badge shows, when it
+                // After a followed action, list each state the badge shows, when it
                 // was first seen, and how long it stayed. Built from badge
                 // swaps (so ~1s accurate while fast-polling); lives until the
                 // next action replaces the result panel.
@@ -509,10 +533,7 @@
                 }
 
                 function timelineSettled(tl) {
-                    const last = tl.entries[tl.entries.length - 1].state;
-                    return tl.method === 'start'
-                        ? !['Stopped', 'Initializing'].includes(last)
-                        : last === 'Stopped';
+                    return tl.gaveUp || FOLLOW[tl.method].settled(tl.entries[tl.entries.length - 1].state);
                 }
 
                 function renderTimeline(tl) {
@@ -584,7 +605,7 @@
                 setInterval(updateTimelines, 1000);
 
                 function maybeWatch(card, method, dryRun) {
-                    if (dryRun || (method !== 'start' && method !== 'stop')) return;
+                    if (dryRun || !FOLLOW[method]) return;
                     if (!card.querySelector('.slicer-card__result .result--ok')) return;
                     startTimeline(card, method);
                     watchSlicer(card.dataset.slicerId, method);
