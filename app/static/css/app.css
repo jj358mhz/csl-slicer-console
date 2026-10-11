@@ -543,6 +543,14 @@ form.inline {
     font-weight: 700;
 }
 
+/* Ready — solid green, deliberately not in the pulsing group below. */
+.badge--state--ready {
+    background: #58b263;
+    color: #18181a;
+    border-color: #58b263;
+    font-weight: 700;
+}
+
 .badge--state--initializing {
     background: #d4aa3c;
     color: #18181a;
