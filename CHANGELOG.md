@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-10-10
+
+### ♻️ Changed
+- **Stopping** state badge now pulses, alongside Initializing, Slicing and
+  Blackout. It keeps the same grey fill as Stopped; only a soft white glow
+  is added. Closes [#43](https://github.com/jj358mhz/csl-slicer-console/issues/43).
+
+---
+
 ## [1.9.2] - 2026-10-10
 
 ### ♻️ Changed
