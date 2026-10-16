@@ -4,6 +4,8 @@
 {% set state_slug = (s.last_state or 'unknown') | lower | replace(' ', '') %}
 <span id="badge-{{ s.id }}"
       class="badge badge--state badge--state--{{ state_slug }}"
+      {#- Tells an open config panel when to reload (new capture, run ended). #}
+      data-config-version="{{ s.config_version }}"
       {#- While starting up or stopping, poll this one slicer every second.
           Each response swaps in a fresh badge, so the timer dies with the old
           element and fast polling stops on its own once the state moves on. -#}

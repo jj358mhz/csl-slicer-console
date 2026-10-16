@@ -16,6 +16,8 @@ import jwt
 import requests
 from cryptography.hazmat.primitives import serialization
 
+from app.uplynk.slicer_config import SlicerConfig
+
 
 class UplynkAPIError(RuntimeError):
     """Raised when the Uplynk v4 API returns an error or invalid response."""
@@ -161,6 +163,18 @@ class UplynkDiscoveryClient:
 
         Uses the v4 retrieve endpoint. Same auth as `list_slicers`.
         """
+        payload = self._retrieve(slicer_id)
+        try:
+            return DiscoveredSlicer.from_api(payload)
+        except KeyError as e:
+            raise UplynkAPIError(f"Uplynk API response missing required field: {e}") from e
+
+    def retrieve_slicer_config(self, slicer_id: str) -> SlicerConfig:
+        """Fetch a single slicer's configuration from the v4 retrieve endpoint."""
+        return SlicerConfig.from_api(self._retrieve(slicer_id))
+
+    def _retrieve(self, slicer_id: str) -> dict[str, Any]:
+        """GET the retrieve endpoint and return the decoded JSON body."""
         token = build_jwt(self.kid, self.sub, self.private_b64, self.scp)
         url = f"{self.api_base}{self.RETRIEVE_ENDPOINT.format(slicer_id=slicer_id)}"
         headers = {
@@ -190,8 +204,6 @@ class UplynkDiscoveryClient:
             payload = response.json()
         except ValueError as e:
             raise UplynkAPIError("Uplynk API returned non-JSON response") from e
-
-        try:
-            return DiscoveredSlicer.from_api(payload)
-        except KeyError as e:
-            raise UplynkAPIError(f"Uplynk API response missing required field: {e}") from e
+        if not isinstance(payload, dict):
+            raise UplynkAPIError("Uplynk API returned an unexpected response shape")
+        return payload

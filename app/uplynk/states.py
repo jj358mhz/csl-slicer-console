@@ -112,3 +112,12 @@ RETRIEVE_TO_CONTROL: dict[str, str | None] = {
     RetrieveState.READY: None,
     RetrieveState.STOPPING: None,
 }
+
+
+# States outside a run: the slicer isn't up, or is on its way down.
+NOT_RUNNING_STATES: frozenset[str] = frozenset({RetrieveState.STOPPED, RetrieveState.STOPPING})
+
+
+def is_running_state(state: str | None) -> bool:
+    """True from Initializing until Stopping — i.e. within one run of the slicer."""
+    return state is not None and state not in NOT_RUNNING_STATES

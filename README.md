@@ -33,6 +33,12 @@ control buttons, and full audit trails.
   Content Start / Blackout ask for confirmation first (skipped in dry-run). **Collapsible workspace sections** with
   per-workspace persistence, sticky chip nav for jumping between
   workspaces, and slicer counts per section.
+- ⚙️ **Slicer config panel** — a Config toggle on each card shows the
+  slicer's configuration (protocol, region, version, encoding profile,
+  plugin, streaming / API URLs and passphrase with copy buttons, and the
+  `key: value` settings as a table). Captured once each time the slicer
+  starts and stored encrypted, so it's never re-queried during a run; after
+  a stop it stays visible, marked "From last run".
 - ✅ **Batch operations** — checkbox per card, section select-all, floating
   action bar, parallel fire against selected slicers, confirmation modal
   for state-changing actions, even on a single selected slicer.
@@ -74,7 +80,7 @@ only)*.
 |-------------------|-----------------------------------------------------------|
 | `users`           | Login accounts (admin flag, active flag)                  |
 | `uplynk_accounts` | Workspaces + encrypted credentials                        |
-| `slicers`         | Discovered or manually-added slicers                      |
+| `slicers`         | Discovered or manually-added slicers + captured config    |
 | `user_slicers`    | Many-to-many: which users control which slicers           |
 | `audit_events`    | Slicer control history (per-user history + admin filters) |
 | `admin_events`    | User / account / slicer CRUD + sync events                |

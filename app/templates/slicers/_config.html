@@ -1,0 +1,94 @@
+{# Slicer configuration panel (#49). Loaded into #config-<id> when the tile's
+   Config toggle opens, and reloaded when the polled badge's
+   data-config-version stops matching this fragment's. Renders the copy
+   captured at the slicer's last start — never a live Uplynk call. #}
+{%- macro row(label, value) -%}
+    <dt>{{ label }}</dt>
+    <dd>{{ value if value else '—' }}</dd>
+{%- endmacro -%}
+{%- macro copy_row(label, value) -%}
+    <dt>{{ label }}</dt>
+    <dd class="config__copyable">
+        {%- if value -%}
+            <span class="config__value mono">{{ value }}</span>
+            <button type="button" class="config__copy" title="Copy {{ label }}"
+                    aria-label="Copy {{ label }} to clipboard">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </button>
+        {%- else -%}
+            —
+        {%- endif -%}
+    </dd>
+{%- endmacro -%}
+<div class="config" data-config-version="{{ s.config_version }}">
+    {% if config %}
+        <div class="config__header">
+            {% if s.is_running %}Captured at start{% else %}From last run · captured{% endif %}
+            · <time class="local-time" datetime="{{ s.config_captured_iso }}">{{ s.config_captured_iso[11:19] }} UTC</time>
+        </div>
+    {% else %}
+        <div class="config__header">Not captured yet</div>
+        <p class="config__note">
+            {% if s.is_running %}It will be captured on the next poll.
+            {% else %}It's captured the next time this slicer starts.{% endif %}
+        </p>
+    {% endif %}
+
+    {% if s.config_error %}
+        <div class="config__error">
+            Couldn't capture the configuration{% if config %} — showing the previous capture{% endif %}:
+            {{ s.config_error }}
+        </div>
+    {% endif %}
+
+    {% if config %}
+        {%- set protocol = config.protocol -%}
+        {%- if config.protocol == 'RIST' and config.rist_profile -%}
+            {%- set protocol = config.protocol ~ ' · ' ~ config.rist_profile -%}
+        {%- endif -%}
+        {%- set plugin = 'none' -%}
+        {%- if config.plugin_id -%}
+            {%- set plugin = config.plugin_id ~ (' · v' ~ config.plugin_version if config.plugin_version else '') -%}
+        {%- endif %}
+        <dl class="config__fields">
+            {{ row('Protocol', protocol) }}
+            {{ row('Region', config.region) }}
+            {{ row('Slicer version', config.slicer_version) }}
+            {{ row('Encoding profile', config.encoding_profile_id) }}
+            {{ row('Plugin', plugin) }}
+            {{ row('Source IP', config.source_ip) }}
+            {{ row('Target state', config.target_state) }}
+            {{ row('Description', config.description) }}
+            {{ row('Created', config.created_at) }}
+        </dl>
+
+        <dl class="config__fields">
+            {{ copy_row('Streaming URL', config.streaming_url) }}
+            {{ copy_row('Slicer API URL', config.slicer_api_url) }}
+            {{ copy_row('Passphrase', config.passphrase) }}
+        </dl>
+
+        {% set settings = config.settings %}
+        <div class="config__subhead">Configuration</div>
+        {% if settings %}
+            <table class="config__settings">
+                {% for key, value in settings %}
+                    <tr>
+                        {% if key is none %}
+                            <td colspan="2">{{ value }}</td>
+                        {% else %}
+                            <th scope="row">{{ key }}</th>
+                            <td>{{ value }}</td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            </table>
+        {% else %}
+            <p class="config__note">No configuration settings.</p>
+        {% endif %}
+    {% endif %}
+</div>

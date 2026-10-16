@@ -89,6 +89,16 @@
                                 {% endfor %}
                             </div>
 
+                            <button type="button"
+                                    class="config-toggle"
+                                    aria-expanded="false"
+                                    aria-controls="config-{{ s.id }}"
+                                    data-config-url="{{ url_for('slicers.config', slicer_id=s.id) }}">
+                                <span class="config-toggle__chevron" aria-hidden="true">▶</span>
+                                Config
+                            </button>
+                            <div id="config-{{ s.id }}" class="slicer-card__config" hidden></div>
+
                             <div id="result-{{ s.id }}" class="slicer-card__result"></div>
                         </div>
                     {% endfor %}
@@ -703,6 +713,99 @@
 
                 syncPulse();
                 new MutationObserver(syncPulse).observe(document.body, {childList: true, subtree: true});
+
+                // ---- Config panel (#49) ----
+                // Toggle per tile; open tiles are remembered across reloads.
+                // The panel serves the config captured at the slicer's last
+                // start, so it's fetched on open and again only when the
+                // polled badge's data-config-version stops matching.
+                const CONFIG_KEY = 'csl-console:open-config';
+
+                function loadOpenConfigs() {
+                    try {
+                        const raw = localStorage.getItem(CONFIG_KEY);
+                        return new Set(raw ? JSON.parse(raw) : []);
+                    } catch (_) {
+                        return new Set();
+                    }
+                }
+
+                function saveOpenConfigs(set) {
+                    try {
+                        localStorage.setItem(CONFIG_KEY, JSON.stringify(Array.from(set)));
+                    } catch (_) { /* quota / private mode — ignore */
+                    }
+                }
+
+                function loadConfig(btn) {
+                    const panel = document.getElementById(btn.getAttribute('aria-controls'));
+                    // One poll response swaps several OOB elements, each of which
+                    // re-checks the version; don't stack up duplicate loads.
+                    if (panel.dataset.loading) return;
+                    panel.dataset.loading = '1';
+                    htmx.ajax('GET', btn.dataset.configUrl, {target: panel, swap: 'innerHTML'})
+                        .catch(() => {
+                            panel.innerHTML = '<div class="config__error">Couldn\'t load the configuration.</div>';
+                        })
+                        .finally(() => {
+                            delete panel.dataset.loading;
+                        });
+                }
+
+                function setConfigOpen(btn, open) {
+                    const panel = document.getElementById(btn.getAttribute('aria-controls'));
+                    btn.setAttribute('aria-expanded', String(open));
+                    panel.hidden = !open;
+                    if (open) loadConfig(btn);
+                    const ids = loadOpenConfigs();
+                    const id = btn.closest('.slicer-card').dataset.slicerId;
+                    open ? ids.add(id) : ids.delete(id);
+                    saveOpenConfigs(ids);
+                }
+
+                document.querySelectorAll('.config-toggle').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        setConfigOpen(btn, btn.getAttribute('aria-expanded') !== 'true');
+                    });
+                });
+
+                const openAtLoad = loadOpenConfigs();
+                document.querySelectorAll('.config-toggle').forEach(btn => {
+                    if (openAtLoad.has(btn.closest('.slicer-card').dataset.slicerId)) setConfigOpen(btn, true);
+                });
+
+                function refreshOpenConfigs() {
+                    document.querySelectorAll('.config-toggle[aria-expanded="true"]').forEach(btn => {
+                        const slicerId = btn.closest('.slicer-card').dataset.slicerId;
+                        const badge = document.getElementById(`badge-${slicerId}`);
+                        const shown = document.querySelector(`#config-${slicerId} .config`);
+                        if (!badge || !shown) return;  // still loading
+                        if (badge.dataset.configVersion !== shown.dataset.configVersion) loadConfig(btn);
+                    });
+                }
+
+                document.body.addEventListener('htmx:oobAfterSwap', refreshOpenConfigs);
+
+                // Captured-at times arrive in UTC; show them in local time
+                // like the result timeline.
+                document.body.addEventListener('htmx:afterSwap', function (e) {
+                    e.detail.target.querySelectorAll('time.local-time').forEach(t => {
+                        t.textContent = hhmmss(t.getAttribute('datetime'));
+                    });
+                });
+
+                document.body.addEventListener('click', async function (e) {
+                    const btn = e.target.closest('.config__copy');
+                    if (!btn) return;
+                    const value = btn.closest('.config__copyable').querySelector('.config__value');
+                    try {
+                        await navigator.clipboard.writeText(value.textContent);
+                        btn.classList.add('config__copy--copied');
+                        setTimeout(() => btn.classList.remove('config__copy--copied'), 1500);
+                    } catch (err) {
+                        console.error('Copy failed:', err);
+                    }
+                });
 
                 // ---- Copy JSON to clipboard ----
                 document.body.addEventListener('click', async function (e) {

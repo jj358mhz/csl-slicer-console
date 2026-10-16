@@ -14,8 +14,11 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from app.uplynk.states import is_running_state
 
 
 def utcnow() -> datetime:
@@ -127,6 +130,19 @@ class Slicer(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_manual: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Configuration captured once per run (see #49): SlicerConfig JSON,
+    # Fernet-encrypted because it carries the SRT/RIST passphrase.
+    config_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    config_captured_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Set by a console Start so the next running poll re-captures even if it
+    # never sees the slicer stopped; cleared once a capture succeeds.
+    config_capture_pending: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    # Last capture failure, shown in the panel; cleared on success.
+    config_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -149,6 +165,33 @@ class Slicer(Base):
         if not self.thumb_url:
             return None
         return hashlib.md5(self.thumb_url.encode()).hexdigest()[:10]
+
+    @property
+    def is_running(self) -> bool:
+        """True from Initializing until Stopping — i.e. within a run."""
+        return is_running_state(self.last_state)
+
+    @property
+    def config_captured_iso(self) -> str | None:
+        """config_captured_at as a UTC ISO-8601 string with a Z suffix.
+
+        SQLite hands back naive datetimes; they were written as UTC.
+        """
+        ts = self.config_captured_at
+        if ts is None:
+            return None
+        ts = ts.replace(tzinfo=UTC) if ts.tzinfo is None else ts.astimezone(UTC)
+        return ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    @property
+    def config_version(self) -> str:
+        """Changes whenever the config panel would render differently.
+
+        Rides on the polled badge so an open panel knows to reload.
+        """
+        captured = self.config_captured_iso or ""
+        error = hashlib.md5(self.config_error.encode()).hexdigest()[:6] if self.config_error else ""
+        return f"{captured}|{int(self.is_running)}|{error}"
 
     def __repr__(self) -> str:
         return f"<Slicer {self.slicer_id}>"
