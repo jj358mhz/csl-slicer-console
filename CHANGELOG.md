@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-10-16
+
+### 🐛 Fixed
+- The config panel header now **always** shows the capture date with the
+  time (`From last run · captured Oct 16, 17:18:48`). v1.13.0 left it off
+  for captures from today, which read as ambiguous.
+  Closes [#53](https://github.com/jj358mhz/csl-slicer-console/issues/53).
+
+---
+
 ## [1.13.0] - 2026-10-16
 
 ### ✨ Added
