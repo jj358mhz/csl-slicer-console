@@ -48,7 +48,7 @@
         <div class="config__header">
             {%- if s.is_running %}Captured at start ·{% else %}From last run · captured{% endif %}
             {#- Server fallback is the UTC date + time; the dashboard JS swaps in
-                local time, adding the date only when it isn't today. #}
+                local date + time. #}
             <time class="local-time" datetime="{{ s.config_captured_iso }}">{{ s.config_captured_iso[:10] }} {{ s.config_captured_iso[11:19] }} UTC</time>
         </div>
     {% else %}

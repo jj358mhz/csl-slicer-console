@@ -787,12 +787,11 @@
                 document.body.addEventListener('htmx:oobAfterSwap', refreshOpenConfigs);
 
                 // Captured-at times arrive in UTC; show them in local time
-                // like the result timeline, with the date when it isn't today
-                // (a last-run config can be days old).
+                // like the result timeline, always with the date (a last-run
+                // config can be days old).
                 function fmtCaptured(iso) {
                     const d = new Date(iso);
                     const now = new Date();
-                    if (d.toDateString() === now.toDateString()) return hhmmss(d);
                     const opts = {month: 'short', day: 'numeric'};
                     if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
                     return `${d.toLocaleDateString([], opts)}, ${hhmmss(d)}`;
