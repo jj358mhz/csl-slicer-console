@@ -758,7 +758,7 @@ def test_thumb_cache_expires_after_ttl(app, client):
 # --- Config panel (#49) ---
 
 
-def _store_config(app, slicer_id, *, state="Slicing", error=None, **fields):
+def _store_config(app, slicer_id, *, state="Slicing", error=None, source=None, **fields):
     from datetime import UTC, datetime
 
     from app.uplynk.slicer_config import SlicerConfig
@@ -778,6 +778,7 @@ def _store_config(app, slicer_id, *, state="Slicing", error=None, **fields):
         s.config_encrypted = encrypt(SlicerConfig(**{**defaults, **fields}).to_json())
         s.config_captured_at = datetime(2026, 10, 16, 14, 2, 11, tzinfo=UTC)
         s.config_error = error
+        s.config_source = source
         db.session.commit()
 
 
@@ -985,6 +986,39 @@ def test_config_refresh_without_scoped_key_shows_error(app, client):
     body = client.post(f"/slicers/{slicer_id}/config/refresh").data.decode()
     assert "no scoped API key" in body
     assert "tennis-scte35 · v1.0" in body
+
+
+@pytest.mark.parametrize(
+    ("state", "source", "caption"),
+    [
+        ("Slicing", None, "Captured at start ·"),
+        ("Slicing", "start", "Captured at start ·"),
+        ("Slicing", "refresh", "Refreshed ·"),
+        ("Stopped", "start", "From last run · captured"),
+        ("Stopped", "refresh", "From last run · refreshed"),
+        ("Stopped", "refresh_stopped", "Not running · refreshed"),
+    ],
+)
+def test_config_header_names_the_capture_source(app, client, state, source, caption):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _store_config(app, slicer_id, state=state, source=source)
+    header = _config_header_text(client.get(f"/slicers/{slicer_id}/config").data.decode())
+    assert header.startswith(caption + ' <time class="local-time"')
+
+
+def test_config_refresh_while_running_is_labelled_refreshed(app, client):
+    from app.uplynk.slicer_config import SlicerConfig
+
+    _login(client)
+    slicer_id = _make_slicer_with_scoped_key(app)
+    _store_config(app, slicer_id)
+    with patch(
+        "app.slicers.service.UplynkDiscoveryClient.retrieve_slicer_config",
+        return_value=SlicerConfig(protocol="SRT"),
+    ):
+        body = client.post(f"/slicers/{slicer_id}/config/refresh").data.decode()
+    assert _config_header_text(body).startswith("Refreshed · ")
 
 
 # --- "Unknown end point" hint (#55) ---

@@ -861,3 +861,49 @@ def test_refresh_config_denied_for_unassigned_user(app):
         slicer = db.session.get(Slicer, ids["slicer_id"])
         with pytest.raises(SlicerAccessDenied):
             refresh_config(other, slicer)
+
+
+# --- Capture source (#59) ---
+
+
+def test_automatic_capture_records_start_source(app):
+    ids = _mk_account_scene(app, n_slicers=1, admin=True)
+    _poll(app, ids, [_fresh("s1", state="Initializing")])
+    with app.app_context():
+        assert db.session.get(Slicer, ids["slicer_ids"][0]).config_source == "start"
+
+
+@pytest.mark.parametrize(
+    ("state", "source"), [("Slicing", "refresh"), ("Stopped", "refresh_stopped")]
+)
+def test_refresh_records_refresh_source(app, state, source):
+    ids = _mk_scene_with_scoped_key(app)
+    with app.app_context():
+        db.session.get(Slicer, ids["slicer_id"]).last_state = state
+        db.session.commit()
+    _refresh(app, ids)
+    with app.app_context():
+        assert db.session.get(Slicer, ids["slicer_id"]).config_source == source
+
+
+def test_failed_refresh_keeps_previous_source(app):
+    ids = _mk_scene_with_scoped_key(app)
+    with app.app_context():
+        s = db.session.get(Slicer, ids["slicer_id"])
+        s.config_source = "start"
+        db.session.commit()
+    _refresh(app, ids, config_error=UplynkAPIError("Uplynk returned 503"))
+    with app.app_context():
+        assert db.session.get(Slicer, ids["slicer_id"]).config_source == "start"
+
+
+def test_restart_after_refresh_goes_back_to_start_source(app):
+    ids = _mk_account_scene(app, n_slicers=1, admin=True)
+    _poll(app, ids, [_fresh("s1", state="Slicing")])
+    with app.app_context():
+        db.session.get(Slicer, ids["slicer_ids"][0]).config_source = "refresh"
+        db.session.commit()
+    _poll(app, ids, [_fresh("s1", state="Stopped")])
+    _poll(app, ids, [_fresh("s1", state="Initializing")])
+    with app.app_context():
+        assert db.session.get(Slicer, ids["slicer_ids"][0]).config_source == "start"

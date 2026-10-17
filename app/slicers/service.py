@@ -8,7 +8,16 @@ from datetime import UTC, datetime
 from flask import current_app
 
 from app.crypto import CryptoError, decrypt, encrypt
-from app.models import AuditEvent, Slicer, UplynkAccount, User, db
+from app.models import (
+    CONFIG_SOURCE_REFRESH,
+    CONFIG_SOURCE_REFRESH_STOPPED,
+    CONFIG_SOURCE_START,
+    AuditEvent,
+    Slicer,
+    UplynkAccount,
+    User,
+    db,
+)
 from app.uplynk.csl import SLICER_METHODS, CSLError, CSLResult, call_slicer
 from app.uplynk.discovery import (
     DiscoveredSlicer,
@@ -210,8 +219,12 @@ def _needs_config_capture(slicer: Slicer, prev_state: str | None) -> bool:
     return not is_running_state(prev_state)
 
 
-def _capture_config(client: UplynkDiscoveryClient, slicer: Slicer) -> None:
+def _capture_config(
+    client: UplynkDiscoveryClient, slicer: Slicer, source: str = CONFIG_SOURCE_START
+) -> None:
     """Fetch and store the slicer's configuration. Caller commits.
+
+    `source` records where the capture came from, for the panel header (#59).
 
     On failure the previous capture is kept, the error is recorded for the
     panel, and the capture stays pending so the next poll retries.
@@ -225,6 +238,7 @@ def _capture_config(client: UplynkDiscoveryClient, slicer: Slicer) -> None:
         return
     slicer.config_encrypted = encrypt(config.to_json())
     slicer.config_captured_at = datetime.now(UTC)
+    slicer.config_source = source
     slicer.config_capture_pending = False
     slicer.config_error = None
 
@@ -249,7 +263,8 @@ def refresh_config(user: User, slicer: Slicer) -> None:
             f"Account {account.label!r} has no scoped API key — cannot fetch config"
         )
 
-    _capture_config(_discovery_client(account), slicer)
+    source = CONFIG_SOURCE_REFRESH if slicer.is_running else CONFIG_SOURCE_REFRESH_STOPPED
+    _capture_config(_discovery_client(account), slicer, source)
     db.session.commit()
 
 

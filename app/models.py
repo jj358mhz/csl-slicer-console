@@ -106,6 +106,11 @@ class UplynkAccount(Base):
         return f"<UplynkAccount {self.label}>"
 
 
+CONFIG_SOURCE_START = "start"
+CONFIG_SOURCE_REFRESH = "refresh"
+CONFIG_SOURCE_REFRESH_STOPPED = "refresh_stopped"
+
+
 class Slicer(Base):
     __tablename__ = "slicers"
 
@@ -143,6 +148,11 @@ class Slicer(Base):
     )
     # Last capture failure, shown in the panel; cleared on success.
     config_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Where the stored capture came from (#59): CONFIG_SOURCE_START (the
+    # automatic capture on start / re-initialize; also NULL, for captures
+    # older than this column), CONFIG_SOURCE_REFRESH (the Refresh button
+    # during a run) or CONFIG_SOURCE_REFRESH_STOPPED (Refresh while stopped).
+    config_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -182,6 +192,18 @@ class Slicer(Base):
             return None
         ts = ts.replace(tzinfo=UTC) if ts.tzinfo is None else ts.astimezone(UTC)
         return ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    @property
+    def config_caption(self) -> str:
+        """The config panel header's words before the capture time (#59)."""
+        source = self.config_source or CONFIG_SOURCE_START
+        if self.is_running:
+            return "Captured at start ·" if source == CONFIG_SOURCE_START else "Refreshed ·"
+        if source == CONFIG_SOURCE_START:
+            return "From last run · captured"
+        if source == CONFIG_SOURCE_REFRESH:
+            return "From last run · refreshed"
+        return "Not running · refreshed"
 
     @property
     def config_version(self) -> str:
