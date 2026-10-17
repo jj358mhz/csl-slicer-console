@@ -1,7 +1,8 @@
 {# Slicer configuration panel (#49). Loaded into #config-<id> when the tile's
    Config toggle opens, and reloaded when the polled badge's
    data-config-version stops matching this fragment's. Renders the copy
-   captured at the slicer's last start — never a live Uplynk call. #}
+   captured at the slicer's last start — never a live Uplynk call, except
+   when the Refresh button posts to /config/refresh (#57). #}
 {%- macro copy_icon() -%}
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -43,26 +44,46 @@
         {%- endif -%}
     </dd>
 {%- endmacro -%}
+{%- macro refresh_button() -%}
+    {#- Re-captures from Uplynk now (#57), for when the slicer reloaded its
+        config without the polls seeing a restart. #}
+    <form class="config__refresh"
+          hx-post="{{ url_for('slicers.config_refresh', slicer_id=s.id) }}"
+          hx-target="#config-{{ s.id }}"
+          hx-swap="innerHTML">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="config__refresh-button"
+                title="Fetch the configuration from Uplynk now">
+            <span class="config__refresh-icon" aria-hidden="true">↻</span> Refresh
+        </button>
+    </form>
+{%- endmacro -%}
 <div class="config" data-config-version="{{ s.config_version }}">
-    {% if config %}
-        <div class="config__header">
-            {%- if s.is_running %}Captured at start ·{% else %}From last run · captured{% endif %}
-            {#- Server fallback is the UTC date + time; the dashboard JS swaps in
-                local date + time. #}
-            <time class="local-time" datetime="{{ s.config_captured_iso }}">{{ s.config_captured_iso[:10] }} {{ s.config_captured_iso[11:19] }} UTC</time>
-        </div>
-    {% else %}
-        <div class="config__header">Not captured yet</div>
+    <div class="config__header">
+        {% if config %}
+            <span>
+                {%- if s.is_running %}Captured at start ·{% else %}From last run · captured{% endif %}
+                {#- Server fallback is the UTC date + time; the dashboard JS swaps in
+                    local date + time. #}
+                <time class="local-time" datetime="{{ s.config_captured_iso }}">{{ s.config_captured_iso[:10] }} {{ s.config_captured_iso[11:19] }} UTC</time>
+            </span>
+        {% else %}
+            <span>Not captured yet</span>
+        {% endif %}
+        {{ refresh_button() }}
+    </div>
+    {% if not config %}
         <p class="config__note">
             {% if s.is_running %}It will be captured on the next poll.
             {% else %}It's captured the next time this slicer starts.{% endif %}
         </p>
     {% endif %}
 
-    {% if s.config_error %}
+    {% set error = refresh_error or s.config_error %}
+    {% if error %}
         <div class="config__error">
             Couldn't capture the configuration{% if config %} — showing the previous capture{% endif %}:
-            {{ s.config_error }}
+            {{ error }}
         </div>
     {% endif %}
 

@@ -37,8 +37,9 @@ control buttons, and full audit trails.
   slicer's configuration (protocol, region, version, encoding profile,
   plugin, streaming / API URLs and passphrase with copy buttons, and the
   `key: value` settings as a table). Captured once each time the slicer
-  starts and stored encrypted, so it's never re-queried during a run; after
-  a stop it stays visible, marked "From last run".
+  starts (including a re-initialize) and stored encrypted, so it's never
+  re-queried during a run; a **Refresh** button pulls it on demand. After a
+  stop it stays visible, marked "From last run".
 - ✅ **Batch operations** — checkbox per card, section select-all, floating
   action bar, parallel fire against selected slicers, confirmation modal
   for state-changing actions, even on a single selected slicer.

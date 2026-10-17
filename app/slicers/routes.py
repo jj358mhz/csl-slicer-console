@@ -14,6 +14,7 @@ from app.slicers.service import (
     control_slicer,
     poll_account_slicer_states,
     poll_slicer_state,
+    refresh_config,
     set_target_state,
     stored_config,
     user_can_control,
@@ -113,6 +114,34 @@ def config(slicer_id: int):
         abort(403)
 
     return render_template("slicers/_config.html", s=slicer, config=stored_config(slicer))
+
+
+@bp.route("/<int:slicer_id>/config/refresh", methods=["POST"])
+@login_required
+def config_refresh(slicer_id: int):
+    """POST /slicers/<id>/config/refresh — re-capture the config now (#57).
+
+    Returns the re-rendered panel. A failed fetch keeps the previous capture
+    and shows the error in the panel.
+    """
+    slicer = db.session.get(Slicer, slicer_id)
+    if slicer is None:
+        abort(404)
+
+    refresh_error = None
+    try:
+        refresh_config(current_user, slicer)
+    except SlicerAccessDenied:
+        abort(403)
+    except UplynkAPIError as e:
+        refresh_error = str(e)
+
+    return render_template(
+        "slicers/_config.html",
+        s=slicer,
+        config=stored_config(slicer),
+        refresh_error=refresh_error,
+    )
 
 
 @bp.route("/<int:slicer_id>/thumb", methods=["GET"])
