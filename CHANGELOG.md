@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-10-16
+
+### 🐛 Fixed
+- The config panel header now says where the capture came from. After
+  **↻ Refresh** it reads `Refreshed · <time>` instead of
+  `Captured at start · <time>`. Once the slicer stops, it reads
+  `From last run · refreshed <time>`, or `Not running · refreshed <time>`
+  if Refresh ran while it was stopped. Automatic captures keep their
+  labels, and the next start goes back to `Captured at start`.
+  Closes [#59](https://github.com/jj358mhz/csl-slicer-console/issues/59).
+
+---
+
 ## [1.15.0] - 2026-10-16
 
 ### ✨ Added
