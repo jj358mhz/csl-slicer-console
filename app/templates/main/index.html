@@ -787,19 +787,32 @@
                 document.body.addEventListener('htmx:oobAfterSwap', refreshOpenConfigs);
 
                 // Captured-at times arrive in UTC; show them in local time
-                // like the result timeline.
+                // like the result timeline, with the date when it isn't today
+                // (a last-run config can be days old).
+                function fmtCaptured(iso) {
+                    const d = new Date(iso);
+                    const now = new Date();
+                    if (d.toDateString() === now.toDateString()) return hhmmss(d);
+                    const opts = {month: 'short', day: 'numeric'};
+                    if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+                    return `${d.toLocaleDateString([], opts)}, ${hhmmss(d)}`;
+                }
+
                 document.body.addEventListener('htmx:afterSwap', function (e) {
                     e.detail.target.querySelectorAll('time.local-time').forEach(t => {
-                        t.textContent = hhmmss(t.getAttribute('datetime'));
+                        t.textContent = fmtCaptured(t.getAttribute('datetime'));
                     });
                 });
 
                 document.body.addEventListener('click', async function (e) {
                     const btn = e.target.closest('.config__copy');
                     if (!btn) return;
-                    const value = btn.closest('.config__copyable').querySelector('.config__value');
+                    // Section buttons carry their text; field buttons copy their value.
+                    const text = btn.dataset.copyText !== undefined
+                        ? btn.dataset.copyText
+                        : btn.closest('.config__copyable').querySelector('.config__value').textContent;
                     try {
-                        await navigator.clipboard.writeText(value.textContent);
+                        await navigator.clipboard.writeText(text);
                         btn.classList.add('config__copy--copied');
                         setTimeout(() => btn.classList.remove('config__copy--copied'), 1500);
                     } catch (err) {

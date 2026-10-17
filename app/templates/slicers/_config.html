@@ -2,6 +2,29 @@
    Config toggle opens, and reloaded when the polled badge's
    data-config-version stops matching this fragment's. Renders the copy
    captured at the slicer's last start — never a live Uplynk call. #}
+{%- macro copy_icon() -%}
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+    </svg>
+{%- endmacro -%}
+{#- Section heading with a copy button for the whole section; the text to
+    copy rides in data-copy-text. #}
+{%- macro section_head(title, text) -%}
+    <div class="config__subhead">
+        <span>{{ title }}</span>
+        {%- if text %}
+            <button type="button" class="config__copy" data-copy-text="{{ text }}"
+                    title="Copy {{ title }}" aria-label="Copy {{ title }} to clipboard">
+                {{ copy_icon() }}
+            </button>
+        {%- endif %}
+    </div>
+{%- endmacro -%}
+{%- macro fields_text(pairs) -%}
+    {%- for label, value in pairs %}{{ label }}: {{ value or '—' }}{% if not loop.last %}{{ '\n' }}{% endif %}{% endfor -%}
+{%- endmacro -%}
 {%- macro row(label, value) -%}
     <dt>{{ label }}</dt>
     <dd>{{ value if value else '—' }}</dd>
@@ -13,11 +36,7 @@
             <span class="config__value mono">{{ value }}</span>
             <button type="button" class="config__copy" title="Copy {{ label }}"
                     aria-label="Copy {{ label }} to clipboard">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
+                {{ copy_icon() }}
             </button>
         {%- else -%}
             —
@@ -27,8 +46,10 @@
 <div class="config" data-config-version="{{ s.config_version }}">
     {% if config %}
         <div class="config__header">
-            {% if s.is_running %}Captured at start{% else %}From last run · captured{% endif %}
-            · <time class="local-time" datetime="{{ s.config_captured_iso }}">{{ s.config_captured_iso[11:19] }} UTC</time>
+            {%- if s.is_running %}Captured at start ·{% else %}From last run · captured{% endif %}
+            {#- Server fallback is the UTC date + time; the dashboard JS swaps in
+                local time, adding the date only when it isn't today. #}
+            <time class="local-time" datetime="{{ s.config_captured_iso }}">{{ s.config_captured_iso[:10] }} {{ s.config_captured_iso[11:19] }} UTC</time>
         </div>
     {% else %}
         <div class="config__header">Not captured yet</div>
@@ -54,26 +75,35 @@
         {%- if config.plugin_id -%}
             {%- set plugin = config.plugin_id ~ (' · v' ~ config.plugin_version if config.plugin_version else '') -%}
         {%- endif %}
+        {%- set summary = [
+            ('Protocol', protocol),
+            ('Region', config.region),
+            ('Slicer version', config.slicer_version),
+            ('Encoding profile', config.encoding_profile_id),
+            ('Plugin', plugin),
+            ('Source IP', config.source_ip),
+            ('Target state', config.target_state),
+            ('Description', config.description),
+            ('Created', config.created_at),
+        ] -%}
+        {%- set connection = [
+            ('Streaming URL', config.streaming_url),
+            ('Slicer API URL', config.slicer_api_url),
+            ('Passphrase', config.passphrase),
+        ] %}
+        {{ section_head('Summary', fields_text(summary)) }}
         <dl class="config__fields">
-            {{ row('Protocol', protocol) }}
-            {{ row('Region', config.region) }}
-            {{ row('Slicer version', config.slicer_version) }}
-            {{ row('Encoding profile', config.encoding_profile_id) }}
-            {{ row('Plugin', plugin) }}
-            {{ row('Source IP', config.source_ip) }}
-            {{ row('Target state', config.target_state) }}
-            {{ row('Description', config.description) }}
-            {{ row('Created', config.created_at) }}
+            {% for label, value in summary %}{{ row(label, value) }}{% endfor %}
         </dl>
 
+        {{ section_head('Connection', fields_text(connection)) }}
         <dl class="config__fields">
-            {{ copy_row('Streaming URL', config.streaming_url) }}
-            {{ copy_row('Slicer API URL', config.slicer_api_url) }}
-            {{ copy_row('Passphrase', config.passphrase) }}
+            {% for label, value in connection %}{{ copy_row(label, value) }}{% endfor %}
         </dl>
 
         {% set settings = config.settings %}
-        <div class="config__subhead">Configuration</div>
+        {# Copies the configuration string exactly as Uplynk returned it. #}
+        {{ section_head('Configuration', (config.configuration or '').strip()) }}
         {% if settings %}
             <table class="config__settings">
                 {% for key, value in settings %}

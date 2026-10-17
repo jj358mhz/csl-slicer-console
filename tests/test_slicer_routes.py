@@ -826,8 +826,22 @@ def test_config_marked_from_last_run_once_stopped(app, client):
     slicer_id = _make_slicer(app)
     _store_config(app, slicer_id, state="Stopped")
     body = client.get(f"/slicers/{slicer_id}/config").data.decode()
-    assert "From last run · captured" in body
     assert "Captured at start" not in body
+    # One separator only: "From last run · captured <time>" (#51).
+    header = " ".join(body.split('class="config__header">', 1)[1].split("</div>", 1)[0].split())
+    assert header == (
+        'From last run · captured <time class="local-time" '
+        'datetime="2026-10-16T14:02:11Z">2026-10-16 14:02:11 UTC</time>'
+    )
+
+
+def test_config_header_while_running_has_one_separator(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _store_config(app, slicer_id)
+    body = client.get(f"/slicers/{slicer_id}/config").data.decode()
+    header = " ".join(body.split('class="config__header">', 1)[1].split("</div>", 1)[0].split())
+    assert header.startswith('Captured at start · <time class="local-time"')
 
 
 def test_config_without_plugin_shows_none(app, client):
@@ -871,3 +885,23 @@ def test_badge_carries_config_version(app, client):
     _store_config(app, slicer_id)
     body = client.get("/").data.decode()
     assert 'data-config-version="2026-10-16T14:02:11Z|1|"' in body
+
+
+def test_config_sections_have_copy_buttons(app, client):
+    import html
+    import re
+
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _store_config(app, slicer_id, region="us-east-1", description='Court "1"')
+    body = client.get(f"/slicers/{slicer_id}/config").data.decode()
+    copies = {
+        title: html.unescape(text)
+        for text, title in re.findall(r'data-copy-text="([^"]*)"\s+title="Copy (\w+)"', body)
+    }
+    assert set(copies) == {"Summary", "Connection", "Configuration"}
+    assert copies["Summary"].splitlines()[:2] == ["Protocol: SRT", "Region: us-east-1"]
+    assert 'Description: Court "1"' in copies["Summary"]
+    assert "Passphrase: s3cret-pass" in copies["Connection"]
+    # The raw configuration string, as Uplynk returned it.
+    assert copies["Configuration"] == "latency: 2000\nurl: rtmp://host:1935/live\nfree text"
