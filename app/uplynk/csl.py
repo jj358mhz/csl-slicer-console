@@ -37,6 +37,18 @@ class CSLResult:
     ok: bool
 
     @property
+    def is_unknown_endpoint(self) -> bool:
+        """True for the slicer's "no route for this path" reply (HTTP 404).
+
+        Seen when content controls are sent to a slicer that isn't capturing
+        yet, but a 404 alone can't prove the cause (see #55).
+        """
+        if self.status_code != 404:
+            return False
+        msg = self.body.get("msg") if isinstance(self.body, dict) else self.body
+        return isinstance(msg, str) and "unknown end point" in msg.lower()
+
+    @property
     def summary(self) -> str:
         """One-line human-readable summary for the UI/audit log."""
         if not self.ok:
