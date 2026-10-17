@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.2] - 2026-10-16
+
+### 💄 Changed
+- The header title ("CSL Slicer Console") now uses **Space Grotesk** at
+  20px instead of Helvetica at 16px. The brand tile and version pill grow
+  to match.
+- Page titles (e.g. "Slicers") shrink from 36px to 26px.
+  Closes [#61](https://github.com/jj358mhz/csl-slicer-console/issues/61).
+
+---
+
 ## [1.15.1] - 2026-10-16
 
 ### 🐛 Fixed
