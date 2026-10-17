@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-10-16
+
+### ✨ Added
+- **Refresh button in the config panel.** Pulls the slicer's configuration
+  from Uplynk on demand and stores it as the current capture, whether or
+  not the slicer is running. If the fetch fails, the previous capture stays
+  and the error is shown.
+
+### 🐛 Fixed
+- A running slicer that **re-initializes** (Slicing → Initializing, e.g.
+  after a plugin version change) now has its config re-captured. Before,
+  Initializing counted as "still running", so the panel kept showing the
+  old plugin version.
+  Closes [#57](https://github.com/jj358mhz/csl-slicer-console/issues/57).
+
+---
+
 ## [1.14.0] - 2026-10-16
 
 ### ✨ Added

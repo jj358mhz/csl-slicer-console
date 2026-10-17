@@ -179,17 +179,33 @@ def _apply_fresh_state(slicer: Slicer, fresh: DiscoveredSlicer) -> bool:
     return changed
 
 
+def _discovery_client(account: UplynkAccount) -> UplynkDiscoveryClient:
+    """A v4 API client for the account's scoped key."""
+    return UplynkDiscoveryClient(
+        api_base=current_app.config["UPLYNK_API_BASE"],
+        kid=account.scoped_kid,
+        sub=account.scoped_sub,
+        private_b64=decrypt(account.scoped_private_b64_encrypted),
+        scp=account.scoped_scp,
+    )
+
+
 def _needs_config_capture(slicer: Slicer, prev_state: str | None) -> bool:
     """True when the slicer is running and we don't yet hold this run's config.
 
     A slicer loads its configuration when it starts, so capture once per
-    run: on the first poll that sees it running after it wasn't, when a
-    console Start (or an earlier failed capture) left a capture pending, or
-    when nothing has ever been captured. Steady-state polls never trigger it.
+    run: on the first poll that sees it running after it wasn't, on the
+    first poll that sees it (re-)enter Initializing — a running slicer that
+    re-initializes, e.g. after a plugin change, has reloaded its config
+    (#57) — when a console Start (or an earlier failed capture) left a
+    capture pending, or when nothing has ever been captured. Steady-state
+    polls never trigger it.
     """
     if not is_running_state(slicer.last_state):
         return False
     if slicer.config_capture_pending or slicer.config_captured_at is None:
+        return True
+    if slicer.last_state == RetrieveState.INITIALIZING and prev_state != RetrieveState.INITIALIZING:
         return True
     return not is_running_state(prev_state)
 
@@ -211,6 +227,30 @@ def _capture_config(client: UplynkDiscoveryClient, slicer: Slicer) -> None:
     slicer.config_captured_at = datetime.now(UTC)
     slicer.config_capture_pending = False
     slicer.config_error = None
+
+
+def refresh_config(user: User, slicer: Slicer) -> None:
+    """Re-capture the slicer's configuration now, on request (#57).
+
+    For when the slicer reloaded its config without the polls noticing a
+    restart. Running or not, the fresh copy replaces the stored one; on
+    failure the previous capture is kept and the error is recorded, as for
+    an automatic capture.
+
+    Raises SlicerAccessDenied if the user isn't permitted to view this slicer.
+    Raises UplynkAPIError if the account has no scoped key.
+    """
+    if not _user_can_control(user, slicer):
+        raise SlicerAccessDenied(f"User {user.email} is not assigned to slicer {slicer.slicer_id}")
+
+    account = slicer.uplynk_account
+    if not account.has_scoped_key:
+        raise UplynkAPIError(
+            f"Account {account.label!r} has no scoped API key — cannot fetch config"
+        )
+
+    _capture_config(_discovery_client(account), slicer)
+    db.session.commit()
 
 
 def stored_config(slicer: Slicer) -> SlicerConfig | None:
@@ -242,14 +282,7 @@ def poll_slicer_state(user: User, slicer: Slicer) -> Slicer:
     if not account.has_scoped_key:
         raise UplynkAPIError(f"Account {account.label!r} has no scoped API key — cannot poll state")
 
-    private_b64 = decrypt(account.scoped_private_b64_encrypted)
-    client = UplynkDiscoveryClient(
-        api_base=current_app.config["UPLYNK_API_BASE"],
-        kid=account.scoped_kid,
-        sub=account.scoped_sub,
-        private_b64=private_b64,
-        scp=account.scoped_scp,
-    )
+    client = _discovery_client(account)
 
     fresh = client.retrieve_slicer(slicer.slicer_id)
 
@@ -302,14 +335,7 @@ def poll_account_slicer_states(user: User, account: UplynkAccount) -> list[Slice
             f"Account {account.label!r} has no scoped API key — cannot poll states"
         )
 
-    private_b64 = decrypt(account.scoped_private_b64_encrypted)
-    client = UplynkDiscoveryClient(
-        api_base=current_app.config["UPLYNK_API_BASE"],
-        kid=account.scoped_kid,
-        sub=account.scoped_sub,
-        private_b64=private_b64,
-        scp=account.scoped_scp,
-    )
+    client = _discovery_client(account)
 
     fresh_by_id: dict[str, DiscoveredSlicer] = {f.slicer_id: f for f in client.list_slicers()}
 

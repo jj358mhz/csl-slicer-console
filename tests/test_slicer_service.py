@@ -781,3 +781,83 @@ def test_stop_and_dry_run_start_do_not_mark_capture_pending(app):
             set_target_state(user, slicer, "stop")
             set_target_state(user, slicer, "start", dry_run=True)
         assert db.session.get(Slicer, ids["slicer_id"]).config_capture_pending is False
+
+
+# --- Re-initialize and manual refresh (#57) ---
+
+
+def test_config_recaptured_when_running_slicer_reinitializes(app):
+    """Slicing -> Initializing (e.g. after a plugin change) is a new run."""
+    from app.slicers.service import stored_config
+
+    ids = _mk_account_scene(app, n_slicers=1, admin=True)
+    _poll(app, ids, [_fresh("s1", state="Slicing")], config=_config(configuration="plugin: 1"))
+    assert (
+        _poll(
+            app,
+            ids,
+            [_fresh("s1", state="Initializing")],
+            config=_config(configuration="plugin: 2"),
+        )
+        == 1
+    )
+    # Staying in Initializing doesn't re-capture on every poll.
+    assert _poll(app, ids, [_fresh("s1", state="Initializing")]) == 0
+    with app.app_context():
+        s = db.session.get(Slicer, ids["slicer_ids"][0])
+        assert stored_config(s).configuration == "plugin: 2"
+
+
+def _refresh(app, ids, config=None, config_error=None):
+    from app.slicers.service import refresh_config
+
+    with app.app_context():
+        user = db.session.get(User, ids["user_id"])
+        slicer = db.session.get(Slicer, ids["slicer_id"])
+        with patch(
+            "app.slicers.service.UplynkDiscoveryClient.retrieve_slicer_config",
+            return_value=config or _config(),
+            side_effect=config_error,
+        ) as mock_cfg:
+            refresh_config(user, slicer)
+        return mock_cfg.call_count
+
+
+def test_refresh_config_replaces_capture_even_when_stopped(app):
+    from app.slicers.service import stored_config
+
+    ids = _mk_scene_with_scoped_key(app)
+    with app.app_context():
+        db.session.get(Slicer, ids["slicer_id"]).last_state = "Stopped"
+        db.session.commit()
+    assert _refresh(app, ids, config=_config(configuration="fresh: 1")) == 1
+    with app.app_context():
+        s = db.session.get(Slicer, ids["slicer_id"])
+        assert stored_config(s).configuration == "fresh: 1"
+        assert s.config_captured_at is not None
+        assert s.config_error is None
+
+
+def test_refresh_config_failure_keeps_previous_capture(app):
+    from app.slicers.service import stored_config
+
+    ids = _mk_scene_with_scoped_key(app)
+    _refresh(app, ids, config=_config(configuration="old: 1"))
+    _refresh(app, ids, config_error=UplynkAPIError("Uplynk returned 503"))
+    with app.app_context():
+        s = db.session.get(Slicer, ids["slicer_id"])
+        assert stored_config(s).configuration == "old: 1"
+        assert "503" in s.config_error
+
+
+def test_refresh_config_denied_for_unassigned_user(app):
+    from app.slicers.service import SlicerAccessDenied, refresh_config
+
+    ids = _mk_scene_with_scoped_key(app)
+    with app.app_context():
+        other = User(email="other@example.com", password_hash="x")
+        db.session.add(other)
+        db.session.commit()
+        slicer = db.session.get(Slicer, ids["slicer_id"])
+        with pytest.raises(SlicerAccessDenied):
+            refresh_config(other, slicer)

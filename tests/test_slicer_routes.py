@@ -781,6 +781,12 @@ def _store_config(app, slicer_id, *, state="Slicing", error=None, **fields):
         db.session.commit()
 
 
+def _config_header_text(body):
+    """The header's caption (left of the Refresh button), whitespace-collapsed."""
+    header = body.split('class="config__header">', 1)[1]
+    return " ".join(header.split("<span>", 1)[1].split("</span>", 1)[0].split())
+
+
 def test_config_requires_login(app, client):
     slicer_id = _make_slicer(app)
     response = client.get(f"/slicers/{slicer_id}/config", follow_redirects=False)
@@ -828,7 +834,7 @@ def test_config_marked_from_last_run_once_stopped(app, client):
     body = client.get(f"/slicers/{slicer_id}/config").data.decode()
     assert "Captured at start" not in body
     # One separator only: "From last run · captured <time>" (#51).
-    header = " ".join(body.split('class="config__header">', 1)[1].split("</div>", 1)[0].split())
+    header = _config_header_text(body)
     assert header == (
         'From last run · captured <time class="local-time" '
         'datetime="2026-10-16T14:02:11Z">2026-10-16 14:02:11 UTC</time>'
@@ -840,7 +846,7 @@ def test_config_header_while_running_has_one_separator(app, client):
     slicer_id = _make_slicer(app)
     _store_config(app, slicer_id)
     body = client.get(f"/slicers/{slicer_id}/config").data.decode()
-    header = " ".join(body.split('class="config__header">', 1)[1].split("</div>", 1)[0].split())
+    header = _config_header_text(body)
     assert header.startswith('Captured at start · <time class="local-time"')
 
 
@@ -905,6 +911,80 @@ def test_config_sections_have_copy_buttons(app, client):
     assert "Passphrase: s3cret-pass" in copies["Connection"]
     # The raw configuration string, as Uplynk returned it.
     assert copies["Configuration"] == "latency: 2000\nurl: rtmp://host:1935/live\nfree text"
+
+
+# --- Config refresh (#57) ---
+
+
+def test_config_panel_has_refresh_button(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    body = client.get(f"/slicers/{slicer_id}/config").data.decode()
+    assert f'hx-post="/slicers/{slicer_id}/config/refresh"' in body
+    assert f'hx-target="#config-{slicer_id}"' in body
+
+
+def test_config_refresh_requires_login(app, client):
+    slicer_id = _make_slicer_with_scoped_key(app)
+    assert client.post(f"/slicers/{slicer_id}/config/refresh").status_code == 302
+
+
+def test_config_refresh_unknown_slicer_returns_404(app, client):
+    _login(client)
+    assert client.post("/slicers/99999/config/refresh").status_code == 404
+
+
+def test_config_refresh_regular_user_denied_on_unassigned_slicer(app, client):
+    slicer_id = _make_slicer_with_scoped_key(app)
+    with app.app_context():
+        db.session.add(User(email="ru@example.com", password_hash=hash_password("password123")))
+        db.session.commit()
+    _login(client, "ru@example.com", "password123")
+    assert client.post(f"/slicers/{slicer_id}/config/refresh").status_code == 403
+
+
+def test_config_refresh_fetches_and_renders_new_capture(app, client):
+    from app.uplynk.slicer_config import SlicerConfig
+
+    _login(client)
+    slicer_id = _make_slicer_with_scoped_key(app)
+    _store_config(app, slicer_id, plugin_version="1.0")
+    fresh = SlicerConfig(protocol="SRT", plugin_id="tennis-scte35", plugin_version="2.0")
+    with patch(
+        "app.slicers.service.UplynkDiscoveryClient.retrieve_slicer_config",
+        return_value=fresh,
+    ) as mock_cfg:
+        response = client.post(f"/slicers/{slicer_id}/config/refresh")
+    mock_cfg.assert_called_once_with("s1")
+    assert response.status_code == 200
+    body = response.data.decode()
+    assert "tennis-scte35 · v2.0" in body
+    assert "v1.0" not in body
+    # Subsequent opens serve the refreshed capture.
+    assert "v2.0" in client.get(f"/slicers/{slicer_id}/config").data.decode()
+
+
+def test_config_refresh_failure_shows_error_and_keeps_capture(app, client):
+    _login(client)
+    slicer_id = _make_slicer_with_scoped_key(app)
+    _store_config(app, slicer_id)
+    with patch(
+        "app.slicers.service.UplynkDiscoveryClient.retrieve_slicer_config",
+        side_effect=UplynkAPIError("Uplynk returned 503"),
+    ):
+        body = client.post(f"/slicers/{slicer_id}/config/refresh").data.decode()
+    assert "showing the previous capture" in body
+    assert "Uplynk returned 503" in body
+    assert "tennis-scte35 · v1.0" in body
+
+
+def test_config_refresh_without_scoped_key_shows_error(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _store_config(app, slicer_id)
+    body = client.post(f"/slicers/{slicer_id}/config/refresh").data.decode()
+    assert "no scoped API key" in body
+    assert "tennis-scte35 · v1.0" in body
 
 
 # --- "Unknown end point" hint (#55) ---
