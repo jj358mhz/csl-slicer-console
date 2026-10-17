@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-10-16
+
+### ✨ Added
+- **Plain-language hint for "Unknown end point" errors.** When a slicer
+  control action (e.g. Content Start, Blackout) gets HTTP 404
+  `Unknown end point`, the result panel now explains it above the raw
+  response: the slicer didn't recognise the command, most often because it
+  isn't capturing yet (check the source; Status shows `state: -1` and no
+  incoming bytes), but possibly a slicer version or configuration issue.
+  The raw response stays visible and the audit log is unchanged.
+  Closes [#55](https://github.com/jj358mhz/csl-slicer-console/issues/55).
+
+---
+
 ## [1.13.1] - 2026-10-16
 
 ### 🐛 Fixed

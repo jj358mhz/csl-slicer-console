@@ -94,3 +94,11 @@ def test_result_summary_variants():
     assert CSLResult(200, {"state": "S"}, True).summary == "OK — state=S"
     assert CSLResult(200, "plain text", True).summary == "OK — plain text"
     assert "500" in CSLResult(500, "bad", False).summary
+
+
+def test_result_is_unknown_endpoint():
+    assert CSLResult(404, {"error": 2, "msg": "Unknown end point"}, False).is_unknown_endpoint
+    assert CSLResult(404, "Unknown end point", False).is_unknown_endpoint
+    assert not CSLResult(404, {"error": 1, "msg": "Not found"}, False).is_unknown_endpoint
+    assert not CSLResult(500, {"msg": "Unknown end point"}, False).is_unknown_endpoint
+    assert not CSLResult(404, {"error": 2}, False).is_unknown_endpoint

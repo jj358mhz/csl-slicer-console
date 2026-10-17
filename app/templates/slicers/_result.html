@@ -27,6 +27,16 @@
     <div class="result__title">
       {{ method_name }} — Error
     </div>
+    {% if outcome.result and outcome.result.is_unknown_endpoint %}
+      {# #55: the slicer's generic route-not-found. Most often it isn't
+         capturing yet, but don't claim a single cause. #}
+      <p class="result__hint">
+        The slicer didn't recognise this command. This usually means it isn't
+        capturing yet: check that the source is connected (Status shows
+        <code>state: -1</code> and no incoming bytes when it isn't). It can also
+        be a slicer version or configuration issue.
+      </p>
+    {% endif %}
     <pre class="result__body">{{ outcome.error or outcome.result.summary }}</pre>
   </div>
 {% endif %}

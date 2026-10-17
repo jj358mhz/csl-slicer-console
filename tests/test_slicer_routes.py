@@ -905,3 +905,37 @@ def test_config_sections_have_copy_buttons(app, client):
     assert "Passphrase: s3cret-pass" in copies["Connection"]
     # The raw configuration string, as Uplynk returned it.
     assert copies["Configuration"] == "latency: 2000\nurl: rtmp://host:1935/live\nfree text"
+
+
+# --- "Unknown end point" hint (#55) ---
+
+
+def _control(client, slicer_id, result, method="content_start"):
+    with patch("app.slicers.service.call_slicer", return_value=result):
+        return client.post(f"/slicers/{slicer_id}/control", data={"method": method})
+
+
+def test_unknown_endpoint_404_shows_hint_and_raw_response(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    response = _control(
+        client, slicer_id, CSLResult(404, {"error": 2, "msg": "Unknown end point"}, False)
+    )
+    body = response.data.decode()
+    assert "The slicer didn't recognise this command" in body
+    assert "slicer version or configuration issue" in body
+    # Raw response still shown below the hint.
+    assert "HTTP 404" in body
+    assert "Unknown end point" in body
+    # Audit log keeps the raw response.
+    with app.app_context():
+        event = db.session.query(AuditEvent).one()
+        assert "Unknown end point" in event.response_snippet
+
+
+def test_other_errors_have_no_hint(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    body = _control(client, slicer_id, CSLResult(500, {"msg": "boom"}, False)).data.decode()
+    assert "recognise this command" not in body
+    assert "HTTP 500" in body
