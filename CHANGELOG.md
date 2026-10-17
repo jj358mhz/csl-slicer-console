@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-16
+
+### ✨ Added
+- **Slicer config panel.** A **Config** toggle on each slicer card shows or
+  hides the slicer's configuration from the v4 retrieve endpoint: protocol
+  (and RIST profile), region, slicer version, encoding profile, plugin
+  (`<id> · v<version>`, or `none`), source IP, target state, description,
+  created time, the streaming URL, slicer API URL and passphrase (each with
+  a copy button), and the line-delimited `configuration` string as a
+  `key: value` table. Open panels are remembered across reloads.
+  Closes [#49](https://github.com/jj358mhz/csl-slicer-console/issues/49).
+- The config is **captured once per run**: when a poll first sees the slicer
+  running (including starts made outside the console), after a console
+  Start, or the first time a running slicer has nothing stored. It's stored
+  server-side (encrypted, since it carries the passphrase), shared by every
+  user, and never re-queried while the slicer runs. Opening the panel reads
+  only the database.
+- After a stop the last config stays visible, marked **From last run**,
+  until the next start replaces it. A failed capture is shown in the panel
+  alongside the previous capture and retried on the next poll.
+
+### ♻️ Changed
+- New migration adds `config_encrypted`, `config_captured_at`,
+  `config_capture_pending` and `config_error` to `slicers`.
+
+---
+
 ## [1.11.0] - 2026-10-10
 
 ### ✨ Added

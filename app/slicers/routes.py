@@ -15,6 +15,7 @@ from app.slicers.service import (
     poll_account_slicer_states,
     poll_slicer_state,
     set_target_state,
+    stored_config,
     user_can_control,
 )
 from app.uplynk.csl import SLICER_METHODS
@@ -95,6 +96,23 @@ def state(slicer_id: int):
         pass
 
     return render_template("slicers/_state.html", s=slicer)
+
+
+@bp.route("/<int:slicer_id>/config", methods=["GET"])
+@login_required
+def config(slicer_id: int):
+    """GET /slicers/<id>/config — the tile's configuration panel.
+
+    Serves the copy captured at the slicer's last start (see #49); never
+    calls Uplynk, so opening and closing the panel is free.
+    """
+    slicer = db.session.get(Slicer, slicer_id)
+    if slicer is None:
+        abort(404)
+    if not user_can_control(current_user, slicer):
+        abort(403)
+
+    return render_template("slicers/_config.html", s=slicer, config=stored_config(slicer))
 
 
 @bp.route("/<int:slicer_id>/thumb", methods=["GET"])

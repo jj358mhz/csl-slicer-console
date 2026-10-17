@@ -753,3 +753,121 @@ def test_thumb_cache_expires_after_ttl(app, client):
 
     assert mock_get.call_count == 1
     assert mock_get_2.call_count == 1
+
+
+# --- Config panel (#49) ---
+
+
+def _store_config(app, slicer_id, *, state="Slicing", error=None, **fields):
+    from datetime import UTC, datetime
+
+    from app.uplynk.slicer_config import SlicerConfig
+
+    defaults = {
+        "protocol": "SRT",
+        "encoding_profile_id": "enc-profile-1",
+        "streaming_url": "srt://ingest.example.com:7000",
+        "passphrase": "s3cret-pass",
+        "plugin_id": "tennis-scte35",
+        "plugin_version": "1.0",
+        "configuration": "latency: 2000\nurl: rtmp://host:1935/live\nfree text",
+    }
+    with app.app_context():
+        s = db.session.get(Slicer, slicer_id)
+        s.last_state = state
+        s.config_encrypted = encrypt(SlicerConfig(**{**defaults, **fields}).to_json())
+        s.config_captured_at = datetime(2026, 10, 16, 14, 2, 11, tzinfo=UTC)
+        s.config_error = error
+        db.session.commit()
+
+
+def test_config_requires_login(app, client):
+    slicer_id = _make_slicer(app)
+    response = client.get(f"/slicers/{slicer_id}/config", follow_redirects=False)
+    assert response.status_code == 302
+
+
+def test_config_unknown_slicer_returns_404(app, client):
+    _login(client)
+    assert client.get("/slicers/99999/config").status_code == 404
+
+
+def test_config_regular_user_denied_on_unassigned_slicer(app, client):
+    slicer_id = _make_slicer(app)
+    with app.app_context():
+        db.session.add(User(email="ru@example.com", password_hash=hash_password("password123")))
+        db.session.commit()
+    _login(client, "ru@example.com", "password123")
+    assert client.get(f"/slicers/{slicer_id}/config").status_code == 403
+
+
+def test_config_renders_stored_capture_without_calling_uplynk(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _store_config(app, slicer_id)
+    with patch("app.uplynk.discovery.UplynkDiscoveryClient._retrieve") as mock_retrieve:
+        response = client.get(f"/slicers/{slicer_id}/config")
+    mock_retrieve.assert_not_called()
+    assert response.status_code == 200
+    body = response.data.decode()
+    assert "Captured at start" in body
+    assert 'datetime="2026-10-16T14:02:11Z"' in body
+    assert "enc-profile-1" in body
+    assert "tennis-scte35 · v1.0" in body
+    assert "s3cret-pass" in body  # shown in plain text, per #49
+    # k:v table — split on the first colon only; unparseable lines kept.
+    assert '<th scope="row">latency</th>' in body
+    assert "rtmp://host:1935/live" in body
+    assert '<td colspan="2">free text</td>' in body
+
+
+def test_config_marked_from_last_run_once_stopped(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _store_config(app, slicer_id, state="Stopped")
+    body = client.get(f"/slicers/{slicer_id}/config").data.decode()
+    assert "From last run · captured" in body
+    assert "Captured at start" not in body
+
+
+def test_config_without_plugin_shows_none(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _store_config(app, slicer_id, plugin_id=None, plugin_version=None)
+    body = client.get(f"/slicers/{slicer_id}/config").data.decode()
+    assert "<dt>Plugin</dt>\n    <dd>none</dd>" in body
+
+
+def test_config_not_captured_yet(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _set_last_state(app, slicer_id, "Stopped")
+    body = client.get(f"/slicers/{slicer_id}/config").data.decode()
+    assert "Not captured yet" in body
+    assert "next time this slicer starts" in body
+
+
+def test_config_shows_capture_error_alongside_previous_capture(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _store_config(app, slicer_id, error="JWT lacks required scope")
+    body = client.get(f"/slicers/{slicer_id}/config").data.decode()
+    assert "showing the previous capture" in body
+    assert "JWT lacks required scope" in body
+
+
+def test_dashboard_renders_config_toggle_closed(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    body = client.get("/").data.decode()
+    assert f'aria-controls="config-{slicer_id}"' in body
+    assert f'data-config-url="/slicers/{slicer_id}/config"' in body
+    assert f'<div id="config-{slicer_id}" class="slicer-card__config" hidden></div>' in body
+
+
+def test_badge_carries_config_version(app, client):
+    _login(client)
+    slicer_id = _make_slicer(app)
+    _store_config(app, slicer_id)
+    body = client.get("/").data.decode()
+    assert 'data-config-version="2026-10-16T14:02:11Z|1|"' in body

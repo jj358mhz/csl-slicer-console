@@ -639,3 +639,145 @@ def test_thumb_version_differs_when_only_the_url_tail_differs():
     a = _row(thumb_url="http://cdn.example.com/seed/one/640/360.jpg")
     b = _row(thumb_url="http://cdn.example.com/seed/two/640/360.jpg")
     assert a.thumb_version != b.thumb_version
+
+
+# --- Config capture (#49) ---
+
+
+def _config(passphrase="s3cret", configuration="port: 5000"):
+    from app.uplynk.slicer_config import SlicerConfig
+
+    return SlicerConfig(protocol="SRT", passphrase=passphrase, configuration=configuration)
+
+
+def _poll(app, ids, fresh_list, config=None, config_error=None):
+    """Run one account poll with list_slicers/retrieve_slicer_config patched."""
+    with app.app_context():
+        user = db.session.get(User, ids["user_id"])
+        account = db.session.get(UplynkAccount, ids["account_id"])
+        with (
+            patch(
+                "app.slicers.service.UplynkDiscoveryClient.list_slicers",
+                return_value=fresh_list,
+            ),
+            patch(
+                "app.slicers.service.UplynkDiscoveryClient.retrieve_slicer_config",
+                return_value=config or _config(),
+                side_effect=config_error,
+            ) as mock_cfg,
+        ):
+            poll_account_slicer_states(user, account)
+        return mock_cfg.call_count
+
+
+def test_config_captured_when_slicer_starts(app):
+    from app.slicers.service import stored_config
+
+    ids = _mk_account_scene(app, n_slicers=1, admin=True)
+    assert _poll(app, ids, [_fresh("s1", state="Initializing")]) == 1
+    with app.app_context():
+        s = db.session.get(Slicer, ids["slicer_ids"][0])
+        assert s.config_captured_at is not None
+        assert stored_config(s).settings == [("port", "5000")]
+        # Stored encrypted — the passphrase isn't sitting in the column.
+        assert "s3cret" not in s.config_encrypted
+
+
+def test_config_not_recaptured_while_running(app):
+    ids = _mk_account_scene(app, n_slicers=1, admin=True)
+    _poll(app, ids, [_fresh("s1", state="Initializing")])
+    assert _poll(app, ids, [_fresh("s1", state="Ready")]) == 0
+    assert _poll(app, ids, [_fresh("s1", state="Slicing")]) == 0
+
+
+def test_config_not_captured_while_stopped(app):
+    ids = _mk_account_scene(app, n_slicers=1, admin=True)
+    assert _poll(app, ids, [_fresh("s1", state="Stopped")]) == 0
+
+
+def test_config_kept_after_stop_and_replaced_on_restart(app):
+    from app.slicers.service import stored_config
+
+    ids = _mk_account_scene(app, n_slicers=1, admin=True)
+    _poll(app, ids, [_fresh("s1", state="Slicing")], config=_config(configuration="run: 1"))
+    assert _poll(app, ids, [_fresh("s1", state="Stopped")]) == 0
+    with app.app_context():
+        s = db.session.get(Slicer, ids["slicer_ids"][0])
+        assert stored_config(s).configuration == "run: 1"
+        assert s.is_running is False
+
+    assert (
+        _poll(
+            app, ids, [_fresh("s1", state="Initializing")], config=_config(configuration="run: 2")
+        )
+        == 1
+    )
+    with app.app_context():
+        s = db.session.get(Slicer, ids["slicer_ids"][0])
+        assert stored_config(s).configuration == "run: 2"
+
+
+def test_config_captured_for_already_running_slicer_with_none_stored(app):
+    ids = _mk_account_scene(app, n_slicers=1, admin=True)
+    with app.app_context():
+        db.session.get(Slicer, ids["slicer_ids"][0]).last_state = "Slicing"
+        db.session.commit()
+    assert _poll(app, ids, [_fresh("s1", state="Slicing")]) == 1
+
+
+def test_config_capture_failure_keeps_previous_and_retries(app):
+    from app.slicers.service import stored_config
+
+    ids = _mk_account_scene(app, n_slicers=1, admin=True)
+    _poll(app, ids, [_fresh("s1", state="Slicing")], config=_config(configuration="run: 1"))
+    _poll(app, ids, [_fresh("s1", state="Stopped")])
+    _poll(
+        app,
+        ids,
+        [_fresh("s1", state="Initializing")],
+        config_error=UplynkAPIError("JWT lacks required scope"),
+    )
+    with app.app_context():
+        s = db.session.get(Slicer, ids["slicer_ids"][0])
+        assert "scope" in s.config_error
+        assert s.config_capture_pending is True
+        assert stored_config(s).configuration == "run: 1"
+
+    # Still running, but the failed capture is retried on the next poll.
+    assert (
+        _poll(app, ids, [_fresh("s1", state="Ready")], config=_config(configuration="run: 2")) == 1
+    )
+    with app.app_context():
+        s = db.session.get(Slicer, ids["slicer_ids"][0])
+        assert s.config_error is None
+        assert s.config_capture_pending is False
+        assert stored_config(s).configuration == "run: 2"
+
+
+def test_successful_start_marks_config_capture_pending(app):
+    from app.slicers.service import set_target_state
+    from app.uplynk.target_state import TargetStateResult
+
+    ids = _mk_scene_with_scoped_key(app)
+    with app.app_context():
+        user = db.session.get(User, ids["user_id"])
+        slicer = db.session.get(Slicer, ids["slicer_id"])
+        with patch("app.slicers.service.set_slicer_target_state") as mock_client:
+            mock_client.return_value = TargetStateResult(status_code=200, body={}, ok=True)
+            set_target_state(user, slicer, "start")
+        assert db.session.get(Slicer, ids["slicer_id"]).config_capture_pending is True
+
+
+def test_stop_and_dry_run_start_do_not_mark_capture_pending(app):
+    from app.slicers.service import set_target_state
+    from app.uplynk.target_state import TargetStateResult
+
+    ids = _mk_scene_with_scoped_key(app)
+    with app.app_context():
+        user = db.session.get(User, ids["user_id"])
+        slicer = db.session.get(Slicer, ids["slicer_id"])
+        with patch("app.slicers.service.set_slicer_target_state") as mock_client:
+            mock_client.return_value = TargetStateResult(status_code=200, body={}, ok=True)
+            set_target_state(user, slicer, "stop")
+            set_target_state(user, slicer, "start", dry_run=True)
+        assert db.session.get(Slicer, ids["slicer_id"]).config_capture_pending is False

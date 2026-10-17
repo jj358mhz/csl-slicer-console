@@ -217,6 +217,27 @@ def test_retrieve_slicer_hits_correct_url(ec_keypair):
     )
 
 
+def test_retrieve_slicer_config_parses_configuration(ec_keypair):
+    item = {
+        **SAMPLE_ITEM,
+        "encoding_profile_id": "abc123",
+        "passphrase": "s3cret",
+        "configuration": "port: 5000",
+    }
+    client = _client(ec_keypair, _mock_response(200, item))
+    cfg = client.retrieve_slicer_config("slicer30158")
+    assert cfg.encoding_profile_id == "abc123"
+    assert cfg.passphrase == "s3cret"
+    assert cfg.plugin_id == "tennis-scte35"
+    assert cfg.settings == [("port", "5000")]
+
+
+def test_retrieve_slicer_config_404_names_slicer(ec_keypair):
+    client = _client(ec_keypair, _mock_response(404, text="not found"))
+    with pytest.raises(UplynkAPIError, match="my-slicer"):
+        client.retrieve_slicer_config("my-slicer")
+
+
 def test_retrieve_slicer_401_raises(ec_keypair):
     client = _client(ec_keypair, _mock_response(401, text="bad token"))
     with pytest.raises(UplynkAPIError, match="401"):

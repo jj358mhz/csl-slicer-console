@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from flask import current_app
 
-from app.crypto import decrypt
+from app.crypto import CryptoError, decrypt, encrypt
 from app.models import AuditEvent, Slicer, UplynkAccount, User, db
 from app.uplynk.csl import SLICER_METHODS, CSLError, CSLResult, call_slicer
 from app.uplynk.discovery import (
@@ -15,6 +15,8 @@ from app.uplynk.discovery import (
     UplynkAPIError,
     UplynkDiscoveryClient,
 )
+from app.uplynk.slicer_config import SlicerConfig
+from app.uplynk.states import RetrieveState, is_running_state
 from app.uplynk.target_state import (
     TARGET_STATE_METHODS,
     TargetStateResult,
@@ -177,6 +179,51 @@ def _apply_fresh_state(slicer: Slicer, fresh: DiscoveredSlicer) -> bool:
     return changed
 
 
+def _needs_config_capture(slicer: Slicer, prev_state: str | None) -> bool:
+    """True when the slicer is running and we don't yet hold this run's config.
+
+    A slicer loads its configuration when it starts, so capture once per
+    run: on the first poll that sees it running after it wasn't, when a
+    console Start (or an earlier failed capture) left a capture pending, or
+    when nothing has ever been captured. Steady-state polls never trigger it.
+    """
+    if not is_running_state(slicer.last_state):
+        return False
+    if slicer.config_capture_pending or slicer.config_captured_at is None:
+        return True
+    return not is_running_state(prev_state)
+
+
+def _capture_config(client: UplynkDiscoveryClient, slicer: Slicer) -> None:
+    """Fetch and store the slicer's configuration. Caller commits.
+
+    On failure the previous capture is kept, the error is recorded for the
+    panel, and the capture stays pending so the next poll retries.
+    """
+    try:
+        config = client.retrieve_slicer_config(slicer.slicer_id)
+    except UplynkAPIError as e:
+        current_app.logger.warning("Config capture failed for %s: %s", slicer.slicer_id, e)
+        slicer.config_error = str(e)[:500]
+        slicer.config_capture_pending = True
+        return
+    slicer.config_encrypted = encrypt(config.to_json())
+    slicer.config_captured_at = datetime.now(UTC)
+    slicer.config_capture_pending = False
+    slicer.config_error = None
+
+
+def stored_config(slicer: Slicer) -> SlicerConfig | None:
+    """The slicer's last captured configuration, or None if there isn't one."""
+    if not slicer.config_encrypted:
+        return None
+    try:
+        return SlicerConfig.from_json(decrypt(slicer.config_encrypted))
+    except (CryptoError, ValueError, TypeError) as e:
+        current_app.logger.warning("Stored config for %s is unreadable: %s", slicer.slicer_id, e)
+        return None
+
+
 def poll_slicer_state(user: User, slicer: Slicer) -> Slicer:
     """Fetch the slicer's current state from Uplynk and persist it.
 
@@ -209,7 +256,12 @@ def poll_slicer_state(user: User, slicer: Slicer) -> Slicer:
     # last_state uses the v4 retrieve vocabulary (see app.uplynk.states).
     # The SHA1 control /state endpoint uses a different vocabulary that only
     # lands in AuditEvent.response_snippet — never rendered as a badge.
-    if _apply_fresh_state(slicer, fresh):
+    prev_state = slicer.last_state
+    changed = _apply_fresh_state(slicer, fresh)
+    if _needs_config_capture(slicer, prev_state):
+        _capture_config(client, slicer)
+        changed = True
+    if changed:
         db.session.commit()
     return slicer
 
@@ -269,7 +321,11 @@ def poll_account_slicer_states(user: User, account: UplynkAccount) -> list[Slice
             # badge renders whatever we last saw, matching poll_slicer_state's
             # stale-on-error behavior.
             continue
+        prev_state = slicer.last_state
         if _apply_fresh_state(slicer, fresh):
+            any_changed = True
+        if _needs_config_capture(slicer, prev_state):
+            _capture_config(client, slicer)
             any_changed = True
 
     if any_changed:
@@ -368,6 +424,11 @@ def set_target_state(
             dry_run,
             error=str(e),
         )
+
+    if outcome.ok and target_state == RetrieveState.READY:
+        # The start (re)loads the slicer's configuration; make sure the next
+        # running poll captures it even if no poll ever sees it stopped.
+        slicer.config_capture_pending = True
 
     return _record_and_return_target_state(user, slicer, method_name, dry_run, outcome)
 
