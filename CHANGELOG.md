@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-16
+
+### ✨ Added
+- **Copy buttons for each config panel section.** The panel is now split
+  into **Summary**, **Connection** and **Configuration**, each with a copy
+  button: Summary and Connection copy `Label: value` lines, Configuration
+  copies the `configuration` string exactly as Uplynk returned it. The
+  per-field copy buttons on the URLs and passphrase stay.
+
+### 🐛 Fixed
+- **Config panel capture time now includes the date when it isn't today**
+  (e.g. `From last run · captured Oct 14, 17:06:28`), since a last-run config
+  can be days old. Today's captures still show just the time.
+- Removed the extra `·` in the "From last run" header
+  (`captured · 17:06:28` → `captured 17:06:28`).
+  Closes [#51](https://github.com/jj358mhz/csl-slicer-console/issues/51).
+
+---
+
 ## [1.12.0] - 2026-10-16
 
 ### ✨ Added
