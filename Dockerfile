@@ -25,6 +25,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---- Runtime stage ----
 FROM python:3.12-slim AS runtime
 
+# deploy.yml prunes old images by this label
+LABEL app=csl-slicer-console
+
 # Install curl for healthcheck, then clean up
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*

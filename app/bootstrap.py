@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from flask import Flask
 from sqlalchemy import inspect
+from sqlalchemy.exc import IntegrityError
 
 from app.auth.passwords import hash_password
 from app.models import User, db
@@ -41,5 +42,10 @@ def bootstrap_admin(app: Flask) -> None:
             is_active=True,
         )
         db.session.add(admin)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Another gunicorn worker won the race to create the same admin.
+            db.session.rollback()
+            return
         app.logger.info("Bootstrap admin user created: %s", email)
