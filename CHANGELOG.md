@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gunicorn 26's control socket is now disabled (it isn't used).
 - The deploy's `docker image prune --filter label=app=csl-slicer-console`
   never matched anything because the label was only on the container. The
-  image now carries it, so old images get cleaned up on the Pi.
+  image now carries it.
 
 ---
 
