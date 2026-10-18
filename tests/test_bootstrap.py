@@ -23,3 +23,16 @@ def test_bootstrap_is_idempotent(app):
     with app.app_context():
         count = db.session.query(User).filter_by(email="test@example.com").count()
         assert count == 1
+
+
+def test_bootstrap_tolerates_concurrent_insert(app, monkeypatch):
+    """A second worker that loses the insert race must not crash."""
+    from sqlalchemy.orm import Query
+
+    from app.bootstrap import bootstrap_admin
+
+    monkeypatch.setattr(Query, "count", lambda self: 0)  # both workers saw an empty table
+    bootstrap_admin(app)
+    monkeypatch.undo()
+    with app.app_context():
+        assert db.session.query(User).filter_by(email="test@example.com").count() == 1

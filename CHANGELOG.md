@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.3] - 2026-10-17
+
+### 🐛 Fixed
+- With more than one gunicorn worker on a fresh database, every worker ran
+  the admin bootstrap and the losers crashed on the `users.email` unique
+  constraint (gunicorn respawned them). The loser now rolls back quietly.
+- `Control server error: Permission denied: '/app/.gunicorn'` at startup:
+  gunicorn 26's control socket is now disabled (it isn't used).
+- The deploy's `docker image prune --filter label=app=csl-slicer-console`
+  never matched anything because the label was only on the container. The
+  image now carries it.
+
+---
+
 ## [1.15.2] - 2026-10-16
 
 ### 💄 Changed
