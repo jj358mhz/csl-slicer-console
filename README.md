@@ -186,6 +186,7 @@ committed to Git.
 | `UPLYNK_API_BASE`          | Uplynk v4 API base (default `https://services.uplynk.com`) |
 | `DISCOVERY_SYNC_INTERVAL`  | Auto-sync interval in minutes (0 = disabled)               |
 | `PLAYER_BASE_URL`          | player_test_harness URL for "▶ Player" links (optional)    |
+| `PLAYER_API_TOKEN`         | Token the player sends to read slicer settings (optional)  |
 
 Bootstrap only runs when the `users` table is empty; subsequent env-var
 changes to `BOOTSTRAP_ADMIN_*` are ignored. Reset an admin password

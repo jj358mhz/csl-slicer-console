@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-19
+
+### ✨ Added
+- **Slicer settings API** for the player test harness:
+  `GET /api/slicers/<slicer>/settings` with `Authorization: Bearer
+  <PLAYER_API_TOKEN>`. Answers from the stored config (never calls
+  Uplynk) with allowlisted keys only — today `wallclock`, as
+  `true`/`false`, or `null` when no config has been captured — plus the
+  capture time. The passphrase and URLs never leave the console. Off
+  (404) unless `PLAYER_API_TOKEN` is set; the player shows it next to
+  its ID3 latency, since only `wallclock: 1` slicers write the encoder
+  time into ID3.
+
+---
+
 ## [1.16.1] - 2026-10-18
 
 ### 🐛 Fixed
