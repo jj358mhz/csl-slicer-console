@@ -1053,3 +1053,30 @@ def test_other_errors_have_no_hint(app, client):
     body = _control(client, slicer_id, CSLResult(500, {"msg": "boom"}, False)).data.decode()
     assert "recognise this command" not in body
     assert "HTTP 500" in body
+
+
+def test_by_id_jumps_to_the_slicer_card(app, client):
+    _login(client)
+    pk = _make_slicer(app)
+    response = client.get("/slicers/by-id/s1")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(f"/#slicer-{pk}")
+
+
+def test_by_id_unknown_or_unassigned_slicer(app, client):
+    _make_slicer(app)
+    with app.app_context():
+        db.session.add(User(email="ru@example.com", password_hash=hash_password("password123")))
+        db.session.commit()
+    _login(client, "ru@example.com", "password123")
+    for name in ("s1", "nope"):  # s1 exists but isn't assigned to this user
+        response = client.get(f"/slicers/by-id/{name}", follow_redirects=True)
+        assert f"No slicer {name} in this console".encode() in response.data
+
+
+def test_player_link_follows_player_base_url(app, client):
+    _login(client)
+    _make_slicer(app)
+    assert b"/channels/by-slicer/" not in client.get("/").data
+    app.config["PLAYER_BASE_URL"] = "https://player.example.com"
+    assert b'href="https://player.example.com/channels/by-slicer/s1"' in client.get("/").data

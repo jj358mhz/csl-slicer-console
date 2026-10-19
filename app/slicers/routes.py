@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 import requests
-from flask import Blueprint, Response, abort, render_template, request
+from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.models import Slicer, UplynkAccount, db
@@ -33,6 +33,20 @@ bp = Blueprint("slicers", __name__, url_prefix="/slicers")
 # workers); a shared cache would be the next step if worker count grows.
 _THUMB_CACHE: dict[int, tuple[str, bytes, str, float]] = {}
 _THUMB_CACHE_TTL_SECONDS = 8
+
+
+@bp.route("/by-id/<path:name>", methods=["GET"])
+@login_required
+def by_id(name: str):
+    """Jump to a slicer's card by its Uplynk id (e.g. from the player's link)."""
+    slicers = (
+        db.session.query(Slicer).filter_by(slicer_id=name, is_active=True).order_by(Slicer.id).all()
+    )
+    visible = [s for s in slicers if user_can_control(current_user, s)]
+    if not visible:
+        flash(f"No slicer {name} in this console (or it isn't assigned to you).", "error")
+        return redirect(url_for("main.index"))
+    return redirect(url_for("main.index", _anchor=f"slicer-{visible[0].id}"))
 
 
 @bp.route("/<int:slicer_id>/control", methods=["POST"])

@@ -785,6 +785,24 @@ form.inline {
     gap: 12px;
 }
 
+.slicer-card:target {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
+.slicer-card__player {
+    margin-left: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.slicer-card__player:hover {
+    color: var(--accent);
+}
+
 .slicer-card {
     background: var(--surface);
     border: 1px solid var(--border);
