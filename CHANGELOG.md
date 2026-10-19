@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-10-18
+
+### 🐛 Fixed
+- `PLAYER_BASE_URL` set in `.env` never reached the app:
+  `docker-compose.yml` passes only the variables it lists. It's passed
+  now, so the **▶ Player** links from v1.16.0 appear once it's set.
+
+---
+
 ## [1.16.0] - 2026-10-18
 
 ### ✨ Added
