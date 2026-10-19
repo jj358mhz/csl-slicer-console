@@ -54,7 +54,7 @@ def create_app(config: Config | None = None) -> Flask:
     # Expose app version to all templates
     @app.context_processor
     def inject_version() -> dict:
-        return {"app_version": APP_VERSION}
+        return {"app_version": APP_VERSION, "player_base_url": app.config["PLAYER_BASE_URL"]}
 
     # First-run bootstrap (idempotent — skips if users already exist)
     bootstrap_admin(app)

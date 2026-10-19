@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-18
+
+### ✨ Added
+- **▶ Player** link on each slicer card, to the player test harness's
+  channel for that slicer (`<PLAYER_BASE_URL>/channels/by-slicer/<slicer>`;
+  one channel opens the player, several open its dashboard filtered to
+  them). Shown only when `PLAYER_BASE_URL` is set.
+- `/slicers/by-id/<slicer>`: jumps to a slicer's card by its Uplynk id
+  (the player harness links here). Opens the card's account section for
+  that visit if it was collapsed and highlights the card. Unknown or
+  unassigned slicers go back to the dashboard with a note.
+
+---
+
 ## [1.15.3] - 2026-10-17
 
 ### 🐛 Fixed
