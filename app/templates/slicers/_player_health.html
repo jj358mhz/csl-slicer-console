@@ -1,0 +1,18 @@
+{# Health badge from the player test harness: the worst of the slicer's
+   channels. Rendered in the card and as an OOB swap by account polling. #}
+{%- set channels = player_health.get(s.slicer_id, []) if player_health else [] -%}
+<span id="player-health-{{ s.id }}" class="slicer-card__health"{% if oob %} hx-swap-oob="true"{% endif %}>
+{%- if channels -%}
+    {%- set c = channels[0] -%}
+    {%- set age = c.edge_s|player_age -%}
+    <a class="badge badge--health badge--health--{{ c.status }}"
+       href="{{ player_base_url }}{{ c.health_url }}" target="_blank" rel="noopener"
+       title="Channel {{ c.name }}{% if channels|length > 1 %} (worst of {{ channels|length }} channels){% endif %}: {{ {'ok': 'at the live edge', 'behind': 'behind live', 'stale': 'stale', 'error': 'error', 'unknown': 'no program dates'}.get(c.status, c.status) }}{% if age %}, newest segment {{ age }} old{% endif %}{% if c.detail %} · {{ c.detail }}{% endif %}{% if c.checked_at %} · checked {{ c.checked_at[11:16] }} UTC{% endif %}. Open its health history in the player.">
+        {%- if c.status == 'ok' %}● {{ age }}
+        {%- elif c.status == 'behind' %}● {{ age }} behind
+        {%- elif c.status == 'stale' %}● stale{% if age %} {{ age }}{% endif %}
+        {%- elif c.status == 'error' %}✕ channel error
+        {%- else %}● no dates{% endif -%}
+    </a>
+{%- endif -%}
+</span>

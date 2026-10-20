@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-10-19
+
+### ✨ Added
+- **Channel health badges** from the player test harness (v3.20.0) on each
+  slicer card, next to **▶ Player**: green with the live edge's age, amber
+  when behind, red when the channel is stale or erroring, grey without
+  program dates. A slicer feeding several channels shows the worst; hover
+  for the channel and details, click for its health history in the player.
+  Fetched server to server from the player's `/api/health/slicers` with
+  the same `PLAYER_API_TOKEN`, cached a minute, and refreshed by the
+  account polling. `PLAYER_API_URL` is where this container reaches the
+  player (default `PLAYER_BASE_URL`). If the player is unreachable the
+  badges are simply absent.
+
+---
+
 ## [1.17.0] - 2026-10-19
 
 ### ✨ Added

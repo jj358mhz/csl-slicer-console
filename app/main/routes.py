@@ -9,6 +9,7 @@ from flask_login import current_user, login_required
 
 from app.main import bp
 from app.models import AuditEvent, Slicer, UplynkAccount, db
+from app.player import channel_health
 
 
 @bp.route("/")
@@ -32,7 +33,9 @@ def index() -> str:
         (label, list(items))
         for label, items in groupby(slicers, key=lambda s: s.uplynk_account.label)
     ]
-    return render_template("main/index.html", groups=groups, total=len(slicers))
+    return render_template(
+        "main/index.html", groups=groups, total=len(slicers), player_health=channel_health()
+    )
 
 
 @bp.route("/history")

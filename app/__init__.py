@@ -53,6 +53,10 @@ def create_app(config: Config | None = None) -> Flask:
     app.register_blueprint(slicers_bp)
     app.register_blueprint(api_bp)
 
+    from app.player import fmt_age
+
+    app.add_template_filter(fmt_age, "player_age")
+
     # Expose app version to all templates
     @app.context_processor
     def inject_version() -> dict:

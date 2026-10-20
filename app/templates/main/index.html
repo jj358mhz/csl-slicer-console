@@ -64,7 +64,8 @@
                                         <a class="slicer-card__player"
                                            href="{{ player_base_url }}/channels/by-slicer/{{ s.slicer_id|urlencode }}"
                                            target="_blank" rel="noopener"
-                                           title="Play this slicer's channel in the player test harness">▶ Player</a>{% endif %}</div>
+                                           title="Play this slicer's channel in the player test harness">▶ Player</a>{% endif %}
+                                        {% include 'slicers/_player_health.html' %}</div>
                                     <div class="slicer-card__meta" id="meta-{{ s.id }}">
                                         {% include 'slicers/_meta.html' %}
                                     </div>

@@ -187,6 +187,7 @@ committed to Git.
 | `DISCOVERY_SYNC_INTERVAL`  | Auto-sync interval in minutes (0 = disabled)               |
 | `PLAYER_BASE_URL`          | player_test_harness URL for "▶ Player" links (optional)    |
 | `PLAYER_API_TOKEN`         | Token the player sends to read slicer settings (optional)  |
+| `PLAYER_API_URL`           | Player URL for channel health badges (default `PLAYER_BASE_URL`) |
 
 Bootstrap only runs when the `users` table is empty; subsequent env-var
 changes to `BOOTSTRAP_ADMIN_*` are ignored. Reset an admin password
