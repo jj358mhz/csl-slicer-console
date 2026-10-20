@@ -41,5 +41,10 @@ class Config:
         self.PLAYER_BASE_URL = os.getenv("PLAYER_BASE_URL", "").strip().rstrip("/")
         # Bearer token the player presents to /api/slicers/<id>/settings (empty = API off).
         self.PLAYER_API_TOKEN = os.getenv("PLAYER_API_TOKEN", "").strip()
+        # Where this container reaches the player for channel health (default
+        # PLAYER_BASE_URL); uses the same token. Empty = no health badges.
+        self.PLAYER_API_URL = (
+            os.getenv("PLAYER_API_URL", "").strip() or self.PLAYER_BASE_URL
+        ).rstrip("/")
 
         self.WTF_CSRF_ENABLED = os.getenv("WTF_CSRF_ENABLED", "true").lower() == "true"

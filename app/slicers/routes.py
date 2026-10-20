@@ -9,6 +9,7 @@ from flask import Blueprint, Response, abort, flash, redirect, render_template, 
 from flask_login import current_user, login_required
 
 from app.models import Slicer, UplynkAccount, db
+from app.player import channel_health
 from app.slicers.service import (
     SlicerAccessDenied,
     control_slicer,
@@ -220,4 +221,6 @@ def account_states(account_id: int):
             assigned_ids = {s.id for s in current_user.slicers}
             visible = [s for s in account.slicers if s.is_active and s.id in assigned_ids]
 
-    return render_template("slicers/_account_state.html", slicers=visible)
+    return render_template(
+        "slicers/_account_state.html", slicers=visible, player_health=channel_health()
+    )
