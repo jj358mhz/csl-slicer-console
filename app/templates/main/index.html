@@ -7,6 +7,11 @@
     <div class="page-header">
         <h1>Slicers</h1>
         <div class="page-header__controls">
+            {% if total %}
+            <input type="search" id="slicer-filter" class="input slicer-filter"
+                   placeholder="Filter slicers…" title="Matches slicer id, description, region, protocol, or “starred”" autocomplete="off"
+                   aria-label="Filter slicers" value="{{ query }}">
+            {% endif %}
             <button type="button" class="btn-ghost" id="collapse-all-btn">Collapse all</button>
             <button type="button" class="btn-ghost" id="expand-all-btn">Expand all</button>
             <label class="checkbox-row" style="font-size: 13px;">
@@ -35,7 +40,7 @@
                     <h2 class="account-section__title">
                         <span class="account-section__chevron" aria-hidden="true">▶</span>
                         {{ account_label }}
-                        <span class="account-section__count">({{ group|length }})</span>
+                        <span class="account-section__count">(<span data-section-count>{{ group|length }}</span>)</span>
                     </h2>
                     <label class="section-selectall">
                         <input type="checkbox" class="section-selectall__cb" data-section="{{ account_label }}">
@@ -48,9 +53,19 @@
                       hx-swap="none"
                       aria-hidden="true"></span>
                 <div class="account-section__body slicer-grid">
+                    {% set pinned = group|selectattr('id', 'in', starred)|list|length %}
                     {% for s in group %}
-                        <div class="slicer-card"
+                        {% if pinned and loop.index0 == pinned and pinned < group|length %}
+                            {# Starred cards come first; a gold rule marks where the rest start. #}
+                            <div class="slicer-grid__divider" role="separator"
+                                 aria-label="Starred slicers above" data-star-divider>
+                                <span class="slicer-grid__divider-label" title="Starred slicers above">★</span>
+                            </div>
+                        {% endif %}
+                        {% set is_starred = s.id in starred %}
+                        <div class="slicer-card{% if is_starred %} slicer-card--starred{% endif %}"
                              id="slicer-{{ s.id }}"
+                             data-search="{{ [s.slicer_id, s.description, s.region, s.protocol, s.connection_mode, 'starred' if is_starred else None]|select|join(' ')|lower }}"
                              data-slicer-id="{{ s.id }}"
                              data-section="{{ account_label }}"
                              data-slicer-name="{{ s.slicer_id }}">
@@ -71,6 +86,14 @@
                                     </div>
                                 </div>
                                 {% include 'slicers/_badge.html' %}
+                                <form method="post" action="{{ url_for('slicers.toggle_star', slicer_id=s.id) }}"
+                                      class="slicer-card__star-form">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit"
+                                            class="slicer-card__star{% if is_starred %} slicer-card__star--on{% endif %}"
+                                            title="{{ 'Unstar' if is_starred else 'Star: list first in this workspace' }}"
+                                            aria-pressed="{{ 'true' if is_starred else 'false' }}">{{ '★' if is_starred else '☆' }}</button>
+                                </form>
                             </div>
 
                             <div class="slicer-card__actions">
@@ -201,8 +224,8 @@
                     // Sync section "select all" checkboxes to match children
                     sectionCbs.forEach(sc => {
                         const section = sc.dataset.section;
-                        const inSection = document.querySelectorAll(`.slicer-card[data-section="${section}"] .slicer-checkbox`);
-                        const checked = document.querySelectorAll(`.slicer-card[data-section="${section}"] .slicer-checkbox:checked`);
+                        const inSection = document.querySelectorAll(`.slicer-card[data-section="${section}"]:not([hidden]) .slicer-checkbox`);
+                        const checked = document.querySelectorAll(`.slicer-card[data-section="${section}"]:not([hidden]) .slicer-checkbox:checked`);
                         if (inSection.length === 0) {
                             sc.checked = false;
                             sc.indeterminate = false;
@@ -224,12 +247,54 @@
                 sectionCbs.forEach(sc => {
                     sc.addEventListener('change', function () {
                         const section = sc.dataset.section;
-                        document.querySelectorAll(`.slicer-card[data-section="${section}"] .slicer-checkbox`).forEach(cb => {
+                        document.querySelectorAll(`.slicer-card[data-section="${section}"]:not([hidden]) .slicer-checkbox`).forEach(cb => {
                             cb.checked = sc.checked;
                         });
                         updateBatchBar();
                     });
                 });
+
+                // ---- Filter ----
+                // Hides cards that don't match; a hidden card is also deselected so
+                // batch actions only ever reach slicers you can see.
+                const filter = document.getElementById('slicer-filter');
+                function applyFilter() {
+                    const q = filter.value.trim().toLowerCase();
+                    document.querySelectorAll('.account-section').forEach(sec => {
+                        let shown = 0;
+                        sec.querySelectorAll('.slicer-card').forEach(card => {
+                            const match = !q || card.dataset.search.includes(q);
+                            card.hidden = !match;
+                            if (match) shown++;
+                            else card.querySelector('.slicer-checkbox').checked = false;
+                        });
+                        sec.hidden = shown === 0;
+                        const count = sec.querySelector('[data-section-count]');
+                        if (count) count.textContent = shown;
+                        // The starred rule only where starred cards show above it and others below.
+                        const rule = sec.querySelector('[data-star-divider]');
+                        if (rule) {
+                            let before = 0;
+                            let after = 0;
+                            let past = false;
+                            for (const el of rule.parentElement.children) {
+                                if (el === rule) past = true;
+                                else if (el.matches('.slicer-card') && !el.hidden) past ? after++ : before++;
+                            }
+                            rule.hidden = !before || !after;
+                        }
+                    });
+                    document.querySelectorAll('.workspace-nav__chip').forEach(chip => {
+                        const target = document.getElementById(chip.dataset.target);
+                        chip.hidden = !!target && target.hidden;
+                    });
+                    updateBatchBar();
+                }
+                if (filter) {
+                    filter.addEventListener('input', applyFilter);
+                    // ?q= pre-fills the filter.
+                    if (filter.value) applyFilter();
+                }
 
                 // ---- Collapsible sections ----
                 const STORAGE_KEY = 'csl-console:collapsed-sections';

@@ -235,6 +235,25 @@ class UserSlicer(Base):
     )
 
 
+class SlicerStar(Base):
+    """A user's starred slicer: listed first in its workspace on the dashboard.
+
+    Per user, so one person's stars don't reorder anyone else's dashboard.
+    """
+
+    __tablename__ = "slicer_stars"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    slicer_id: Mapped[int] = mapped_column(
+        ForeignKey("slicers.id", ondelete="CASCADE"), primary_key=True
+    )
+    starred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
 class AuditEvent(Base):
     """Record of every slicer control action attempted."""
 

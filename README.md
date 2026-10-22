@@ -21,6 +21,9 @@ control buttons, and full audit trails.
 - 🔍 **Auto-discovery + fallback** — one-click Sync populates slicers from
   `/api/v4/ingest/cloud-slicers/live/slicers`. Manual slicer CRUD available
   for accounts without a scoped key.
+- ⭐ **Stars and filter** — star slicers (per user) to list them first in
+  their workspace, above a gold rule; filter cards by id, description,
+  region or protocol as you type.
 - 🎛️ **HTMX dashboard** — slicers grouped by workspace with live state
   pills (Slicing / AdBreak / Blackout / Initializing / Stopped; Slicing,
   Blackout, Initializing and Stopping pulse, and a starting or stopping slicer
