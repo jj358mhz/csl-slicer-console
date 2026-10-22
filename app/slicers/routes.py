@@ -8,7 +8,7 @@ import requests
 from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.models import Slicer, UplynkAccount, db
+from app.models import Slicer, SlicerStar, UplynkAccount, db
 from app.player import channel_health
 from app.slicers.service import (
     SlicerAccessDenied,
@@ -48,6 +48,24 @@ def by_id(name: str):
         flash(f"No slicer {name} in this console (or it isn't assigned to you).", "error")
         return redirect(url_for("main.index"))
     return redirect(url_for("main.index", _anchor=f"slicer-{visible[0].id}"))
+
+
+@bp.route("/<int:slicer_id>/star", methods=["POST"])
+@login_required
+def toggle_star(slicer_id: int):
+    """Star or unstar a slicer for the current user (starred ones list first)."""
+    slicer = db.session.get(Slicer, slicer_id)
+    if slicer is None:
+        abort(404)
+    if not user_can_control(current_user, slicer):
+        abort(403)
+    star = db.session.get(SlicerStar, (current_user.id, slicer.id))
+    if star is None:
+        db.session.add(SlicerStar(user_id=current_user.id, slicer_id=slicer.id))
+    else:
+        db.session.delete(star)
+    db.session.commit()
+    return redirect(url_for("main.index", _anchor=f"slicer-{slicer.id}"))
 
 
 @bp.route("/<int:slicer_id>/control", methods=["POST"])

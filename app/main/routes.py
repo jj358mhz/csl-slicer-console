@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from itertools import groupby
 
-from flask import jsonify, render_template
+from flask import jsonify, render_template, request
 from flask_login import current_user, login_required
 
 from app.main import bp
-from app.models import AuditEvent, Slicer, UplynkAccount, db
+from app.models import AuditEvent, Slicer, SlicerStar, UplynkAccount, db
 from app.player import channel_health
 
 
@@ -29,12 +29,27 @@ def index() -> str:
             key=lambda s: (s.uplynk_account.label, s.slicer_id),
         )
 
+    starred = {
+        slicer_id
+        for (slicer_id,) in db.session.query(SlicerStar.slicer_id).filter_by(
+            user_id=current_user.id
+        )
+    }
+    # Starred slicers first within each workspace.
+    slicers = sorted(
+        slicers, key=lambda s: (s.uplynk_account.label, s.id not in starred, s.slicer_id)
+    )
     groups = [
         (label, list(items))
         for label, items in groupby(slicers, key=lambda s: s.uplynk_account.label)
     ]
     return render_template(
-        "main/index.html", groups=groups, total=len(slicers), player_health=channel_health()
+        "main/index.html",
+        groups=groups,
+        total=len(slicers),
+        starred=starred,
+        query=request.args.get("q", ""),
+        player_health=channel_health(),
     )
 
 

@@ -57,6 +57,10 @@
     --accent-bg: rgba(236, 30, 121, .08);
     --accent-grad: linear-gradient(135deg, #ec1e79, #8b1ecf);
 
+    /* Starred slicers: gold (★, card border, the rule after them) */
+    --pin: #e3b341;
+    --pin-soft: rgba(227, 179, 65, .45);
+
     /* Semantic aliases */
     --primary: var(--accent);
     --primary-hover: var(--accent-hover);
@@ -851,7 +855,7 @@ form.inline {
 
 .slicer-card__header {
     display: grid;
-    grid-template-columns: auto auto 1fr auto;
+    grid-template-columns: auto auto 1fr auto auto;
     gap: 10px;
     align-items: flex-start;
 }
@@ -895,6 +899,84 @@ form.inline {
 .slicer-card__title {
     grid-column: 3;
     min-width: 0;
+}
+
+.slicer-card__star-form {
+    grid-column: 5;
+}
+
+.slicer-card__star {
+    background: none;
+    border: none;
+    color: var(--text-faint);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.slicer-card__star:hover {
+    color: var(--pin);
+}
+
+.slicer-card__star--on {
+    color: var(--pin);
+}
+
+.slicer-card--starred {
+    border-color: var(--pin-soft);
+}
+
+.slicer-card[hidden],
+.account-section[hidden],
+.workspace-nav__chip[hidden] {
+    display: none;
+}
+
+.slicer-filter {
+    width: 260px;
+    max-width: 100%;
+    font-family: var(--font-body);
+}
+
+/* Between starred cards and the rest: a gold double rule fading out at both
+   ends, a star in the middle. Unlike the grey section header rules (with
+   their ▶ chevrons), it reads as a break inside one workspace. */
+.slicer-grid__divider {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0;
+    color: var(--pin);
+    font-size: 12px;
+}
+
+.slicer-grid__divider[hidden] {
+    display: none;
+}
+
+.slicer-grid__divider::before,
+.slicer-grid__divider::after {
+    content: "";
+    flex: 1;
+    height: 5px;
+    /* Two 1px lines, 3px apart, fading toward the edges. */
+    background:
+        linear-gradient(var(--pin-soft), var(--pin-soft)) top / 100% 1px no-repeat,
+        linear-gradient(var(--pin-soft), var(--pin-soft)) bottom / 100% 1px no-repeat;
+}
+
+.slicer-grid__divider::before {
+    mask-image: linear-gradient(to right, transparent, #000 40%);
+}
+
+.slicer-grid__divider::after {
+    mask-image: linear-gradient(to left, transparent, #000 40%);
+}
+
+.slicer-grid__divider-label {
+    white-space: nowrap;
 }
 
 .slicer-card__header > .badge--state {

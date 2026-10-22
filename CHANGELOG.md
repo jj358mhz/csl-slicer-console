@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-10-21
+
+### ✨ Added
+- **Starred slicers**: ☆ on each card stars a slicer for you (stars are per
+  user, so they don't reorder anyone else's dashboard). Starred slicers come
+  first in their workspace with a gold border and ★, and a gold double rule
+  separates them from the rest, the same look as the player test harness's
+  pinned channels. New `slicer_stars` table (migration `f7a2c9d41b86`).
+- **Filter box** on the dashboard: as you type, it hides slicers whose id,
+  description, region or protocol don't match (`starred` matches starred
+  ones). Workspace sections, counts and chips follow; hidden slicers are
+  deselected so batch actions only reach what you can see, and Select all
+  only selects visible cards. `/?q=` pre-fills it.
+
+---
+
 ## [1.18.0] - 2026-10-19
 
 ### ✨ Added
