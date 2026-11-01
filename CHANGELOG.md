@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.1] - 2026-10-31
+
+### 🐛 Fixed
+- **Long slicer names no longer run under the state badge** on phones.
+  Slicer ids have no spaces, so a long one couldn't wrap and overflowed
+  its column; the name now breaks where it has to.
+
 ## [1.19.0] - 2026-10-21
 
 ### ✨ Added
