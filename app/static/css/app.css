@@ -987,6 +987,9 @@ form.inline {
     font-weight: 700;
     font-size: 16px;
     color: var(--text-primary);
+    /* Slicer ids have no spaces (riverside_xxx_dev); without a break point a
+       long one ran past its column and under the state badge on phones. */
+    overflow-wrap: anywhere;
 }
 
 .slicer-card__meta {
