@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.2] - 2026-11-04
+
+### 📚 Docs
+- The player test harness's repository is now `player-test-harness`; the
+  README, `.env.example` and a config comment use the new name. No setting
+  changes: `PLAYER_BASE_URL` and `PLAYER_API_URL` stay as they are.
+
 ## [1.19.1] - 2026-10-31
 
 ### 🐛 Fixed
