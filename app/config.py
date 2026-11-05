@@ -37,7 +37,7 @@ class Config:
 
         self.UPLYNK_API_BASE = os.getenv("UPLYNK_API_BASE", "https://services.uplynk.com")
         self.DISCOVERY_SYNC_INTERVAL = int(os.getenv("DISCOVERY_SYNC_INTERVAL", "15"))
-        # player_test_harness, for "▶ Player" links on slicer cards (empty = no links).
+        # player-test-harness, for "▶ Player" links on slicer cards (empty = no links).
         self.PLAYER_BASE_URL = os.getenv("PLAYER_BASE_URL", "").strip().rstrip("/")
         # Bearer token the player presents to /api/slicers/<id>/settings (empty = API off).
         self.PLAYER_API_TOKEN = os.getenv("PLAYER_API_TOKEN", "").strip()

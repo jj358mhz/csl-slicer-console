@@ -188,7 +188,7 @@ committed to Git.
 | `GUNICORN_WORKERS`         | Worker count (default 3)                                   |
 | `UPLYNK_API_BASE`          | Uplynk v4 API base (default `https://services.uplynk.com`) |
 | `DISCOVERY_SYNC_INTERVAL`  | Auto-sync interval in minutes (0 = disabled)               |
-| `PLAYER_BASE_URL`          | player_test_harness URL for "▶ Player" links (optional)    |
+| `PLAYER_BASE_URL`          | player-test-harness URL for "▶ Player" links (optional)    |
 | `PLAYER_API_TOKEN`         | Token the player sends to read slicer settings (optional)  |
 | `PLAYER_API_URL`           | Player URL for channel health badges (default `PLAYER_BASE_URL`) |
 
