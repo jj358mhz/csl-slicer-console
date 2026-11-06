@@ -3,9 +3,9 @@
 Uses the same Scoped API Key (XAuth/JWT) auth as discovery, but requires
 the `video.services.slicer.cloudslicer.live:write` scope on the key.
 
-The v4 update endpoint accepts a partial-update PATCH; the only field we
-set is target_state (Ready|Stopped), which the CSL orchestrator uses to
-start or stop the slicer instance.
+The v4 update endpoint accepts a partial-update PATCH. Start/Stop only set
+target_state (Ready|Stopped), which the CSL orchestrator uses to start or
+stop the slicer instance; patch_slicer() sends any other fields (#71).
 
 See:
 - https://docs.uplynk.com/reference/update_live_cloud_slicer
@@ -59,6 +59,50 @@ class TargetStateResult:
         return f"OK — {str(self.body)[:200]}"
 
 
+def patch_slicer(
+    api_base: str,
+    slicer_id: str,
+    fields: dict,
+    *,
+    kid: str,
+    sub: str,
+    private_b64: str,
+    scp: str,
+    timeout: int = 15,
+    session: requests.Session | None = None,
+) -> TargetStateResult:
+    """PATCH the given fields onto a v4 slicer.
+
+    Raises UplynkAPIError on network failure. HTTP-level failures (4xx/5xx)
+    return a TargetStateResult with ok=False so the audit path can persist
+    them uniformly.
+    """
+    token = build_jwt(kid, sub, private_b64, scp)
+    url = f"{api_base.rstrip('/')}{UPDATE_ENDPOINT.format(slicer_id=slicer_id)}"
+    headers = {
+        "X-Auth-Uplynk-Jwt": token,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    http = session or requests.Session()
+    try:
+        response = http.patch(url, json=fields, headers=headers, timeout=timeout)
+    except requests.RequestException as e:
+        raise UplynkAPIError(f"Request to Uplynk failed: {e}") from e
+
+    try:
+        parsed: dict | str = response.json()
+    except ValueError:
+        parsed = response.text
+
+    return TargetStateResult(
+        status_code=response.status_code,
+        body=parsed,
+        ok=200 <= response.status_code < 300,
+    )
+
+
 def set_slicer_target_state(
     api_base: str,
     slicer_id: str,
@@ -78,32 +122,16 @@ def set_slicer_target_state(
     - target_state: one of TARGET_STATE_METHODS.values() ("Ready" or "Stopped")
     - kid/sub/private_b64/scp: scoped-key material (already decrypted)
 
-    Raises UplynkAPIError on network failure. HTTP-level failures (4xx/5xx)
-    return a TargetStateResult with ok=False so the audit path can persist
-    them uniformly.
+    Raises UplynkAPIError on network failure; see patch_slicer().
     """
-    token = build_jwt(kid, sub, private_b64, scp)
-    url = f"{api_base.rstrip('/')}{UPDATE_ENDPOINT.format(slicer_id=slicer_id)}"
-    headers = {
-        "X-Auth-Uplynk-Jwt": token,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-    body = {"target_state": target_state}
-
-    http = session or requests.Session()
-    try:
-        response = http.patch(url, json=body, headers=headers, timeout=timeout)
-    except requests.RequestException as e:
-        raise UplynkAPIError(f"Request to Uplynk failed: {e}") from e
-
-    try:
-        parsed: dict | str = response.json()
-    except ValueError:
-        parsed = response.text
-
-    return TargetStateResult(
-        status_code=response.status_code,
-        body=parsed,
-        ok=200 <= response.status_code < 300,
+    return patch_slicer(
+        api_base,
+        slicer_id,
+        {"target_state": target_state},
+        kid=kid,
+        sub=sub,
+        private_b64=private_b64,
+        scp=scp,
+        timeout=timeout,
+        session=session,
     )

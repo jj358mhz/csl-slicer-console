@@ -100,6 +100,8 @@ class UplynkDiscoveryClient:
 
     LIST_ENDPOINT = "/api/v4/ingest/cloud-slicers/live/slicers"
     RETRIEVE_ENDPOINT = "/api/v4/ingest/cloud-slicers/live/slicers/{slicer_id}"
+    VERSIONS_ENDPOINT = "/api/v4/ingest/cloud-slicers/live/slicers/versions"
+    PLUGINS_ENDPOINT = "/api/v4/ingest/cloud-slicers/live/slicers/plugins"
 
     def __init__(
         self,
@@ -172,6 +174,56 @@ class UplynkDiscoveryClient:
     def retrieve_slicer_config(self, slicer_id: str) -> SlicerConfig:
         """Fetch a single slicer's configuration from the v4 retrieve endpoint."""
         return SlicerConfig.from_api(self._retrieve(slicer_id))
+
+    def retrieve_slicer_snapshot(self, slicer_id: str) -> tuple[str | None, SlicerConfig]:
+        """Fetch a slicer's current state and configuration in one call."""
+        payload = self._retrieve(slicer_id)
+        return (payload.get("status") or {}).get("state"), SlicerConfig.from_api(payload)
+
+    def list_versions(self, region: str | None = None) -> list[str]:
+        """Slicer versions available in a region, newest first.
+
+        Version ids start with their build date, so they sort by age.
+        """
+        params = {"region": region} if region else None
+        items = self._list_items(self.VERSIONS_ENDPOINT, params)
+        return sorted((i["id"] for i in items if i.get("id")), reverse=True)
+
+    def list_plugins(self) -> dict[str, list[str]]:
+        """Available plugins as {plugin id: its versions, newest first}."""
+        return {
+            item["id"]: [v["version"] for v in reversed(item.get("versions") or [])]
+            for item in self._list_items(self.PLUGINS_ENDPOINT)
+            if item.get("id")
+        }
+
+    def _list_items(self, endpoint: str, params: dict | None = None) -> list[dict[str, Any]]:
+        """GET a v4 list endpoint and return its `items`."""
+        token = build_jwt(self.kid, self.sub, self.private_b64, self.scp)
+        headers = {
+            "X-Auth-Uplynk-Jwt": token,
+            "Accept": "application/json",
+        }
+
+        try:
+            response = self._session.get(
+                f"{self.api_base}{endpoint}", headers=headers, params=params, timeout=self.timeout
+            )
+        except requests.RequestException as e:
+            raise UplynkAPIError(f"Request to Uplynk failed: {e}") from e
+
+        if response.status_code != 200:
+            raise UplynkAPIError(
+                f"Uplynk API returned HTTP {response.status_code}: {response.text[:200]}"
+            )
+
+        try:
+            items = response.json().get("items")
+        except (ValueError, AttributeError) as e:
+            raise UplynkAPIError("Uplynk API returned an unexpected response shape") from e
+        if not isinstance(items, list):
+            raise UplynkAPIError("Uplynk API response missing 'items' list")
+        return items
 
     def _retrieve(self, slicer_id: str) -> dict[str, Any]:
         """GET the retrieve endpoint and return the decoded JSON body."""

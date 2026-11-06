@@ -1,0 +1,45 @@
+{# Shared pieces of the Slicer Updates pages (#71). #}
+{% macro steps(current) %}
+<ol class="updates-steps">
+  {% for label in ['Select', 'Edit', 'Review', 'Results'] %}
+    <li{% if loop.index == current %} class="updates-steps__step--current" aria-current="step"{% endif %}>{{ loop.index }}. {{ label }}</li>
+  {% endfor %}
+</ol>
+{% endmacro %}
+
+{% macro state_badge(state) %}
+<span class="badge badge--state badge--state--{{ (state or 'unknown') | lower }}">{{ state or 'Unknown' }}</span>
+{% endmacro %}
+
+{# The request, carried from step to step. config_text is the box's text and
+   config_base what it started from, which is how an edit is detected. #}
+{% macro carried_fields(pks, update, config_text=none, config_base=none) %}
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% for pk in pks %}<input type="hidden" name="slicer_ids" value="{{ pk }}">{% endfor %}
+<input type="hidden" name="slicer_version" value="{{ update.slicer_version }}">
+<input type="hidden" name="encoding_profile_id" value="{{ update.encoding_profile_id }}">
+<input type="hidden" name="configuration" value="{{ update.configuration if config_text is none else config_text }}">
+<input type="hidden" name="config_base" value="{{ update.config_base if config_base is none else config_base }}">
+{% if update.plugin_id %}
+  <input type="hidden" name="update_plugin" value="1">
+  <input type="hidden" name="plugin" value="{{ update.plugin_value }}">
+{% endif %}
+{% if update.batch %}<input type="hidden" name="batch" value="1">{% endif %}
+{% endmacro %}
+
+{% macro changes(plan) %}
+{% for c in plan.changes %}
+  <div class="updates-change">
+    <div class="muted">{{ c.field }}</div>
+    <div class="mono"><span class="muted">{{ c.before }}</span> → <span class="updates-change__after">{{ c.after }}</span></div>
+  </div>
+{% endfor %}
+{% if plan.diff %}
+  <div class="updates-change"><div class="muted">configuration</div></div>
+  <div class="updates-diff">
+    {% for d in plan.diff %}
+      <div class="updates-diff__line updates-diff__line--{{ 'removed' if d.removed else 'added' }}">{{ '-' if d.removed else '+' }} {{ d.text }}</div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endmacro %}

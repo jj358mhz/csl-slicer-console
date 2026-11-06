@@ -109,6 +109,7 @@ class UplynkAccount(Base):
 CONFIG_SOURCE_START = "start"
 CONFIG_SOURCE_REFRESH = "refresh"
 CONFIG_SOURCE_REFRESH_STOPPED = "refresh_stopped"
+CONFIG_SOURCE_UPDATE = "update"
 
 
 class Slicer(Base):
@@ -151,7 +152,8 @@ class Slicer(Base):
     # Where the stored capture came from (#59): CONFIG_SOURCE_START (the
     # automatic capture on start / re-initialize; also NULL, for captures
     # older than this column), CONFIG_SOURCE_REFRESH (the Refresh button
-    # during a run) or CONFIG_SOURCE_REFRESH_STOPPED (Refresh while stopped).
+    # during a run), CONFIG_SOURCE_REFRESH_STOPPED (Refresh while stopped) or
+    # CONFIG_SOURCE_UPDATE (a Slicer Updates change, #71).
     config_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
@@ -197,6 +199,8 @@ class Slicer(Base):
     def config_caption(self) -> str:
         """The config panel header's words before the capture time (#59)."""
         source = self.config_source or CONFIG_SOURCE_START
+        if source == CONFIG_SOURCE_UPDATE:
+            return "Updated from the console ·"
         if self.is_running:
             return "Captured at start ·" if source == CONFIG_SOURCE_START else "Refreshed ·"
         if source == CONFIG_SOURCE_START:

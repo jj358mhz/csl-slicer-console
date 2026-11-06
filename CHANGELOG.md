@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-11-06
+
+### ✨ Added
+- **Slicer Updates** (#71): a new admin-only tab for changing `slicer_version`,
+  `configuration`, `encoding_profile_id` and, optionally, `plugin` on one
+  slicer or a batch, in four steps: select, edit, review, results.
+  - Every step reads the slicer's current settings from Uplynk first, and each
+    slicer gets one PATCH holding only what changed. A slicer that already has
+    the settings is skipped, so it doesn't restart.
+  - Review shows old → new values and a configuration diff for each slicer.
+    Running slicers are named and need confirming, because an update restarts
+    them.
+  - In a batch, one configuration goes to every slicer and each keeps its own
+    `description` line. The text is sent whole because Uplynk replaces the
+    configuration rather than merging it, and an empty one is refused.
+  - Results explain each HTTP status: what it means, what to do next and
+    Uplynk's own message, with a retry for anything that wasn't updated. One
+    slicer failing doesn't stop the others.
+  - Accounts whose saved key doesn't list a write scope get a warning, and
+    their slicers can't be selected.
+  - Each attempt goes in the audit log as `update_settings` with old and new
+    values, and the config panel shows the new settings straight away, labelled
+    "Updated from the console". The player settings API's `source` field can
+    now also be `update`.
 ## [1.19.2] - 2026-11-04
 
 ### 📚 Docs

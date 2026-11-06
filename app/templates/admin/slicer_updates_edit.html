@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% import "admin/_slicer_updates.html" as ui %}
+{% block title_suffix %} — Slicer Updates{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Slicer Updates</h1>
+  <span class="badge">Admin only</span>
+</div>
+{{ ui.steps(step) }}
+
+<p class="muted">
+  Editing {{ slicers | length }} slicer{% if slicers | length != 1 %}s{% endif %}:
+  <span class="mono">{{ slicers | map(attribute='slicer_id') | join(', ') }}</span>.
+  Anything left blank or unchanged isn't sent.
+</p>
+
+{% if error %}<div class="flash flash--error" role="alert">{{ error }}</div>{% endif %}
+{% for warning in options.warnings %}<div class="flash flash--error">{{ warning }}</div>{% endfor %}
+{% for slicer_id, read_error in read_errors %}
+  <div class="flash flash--error">Couldn't read {{ slicer_id }}: {{ read_error }}</div>
+{% endfor %}
+
+<form method="post" action="{{ url_for('admin.slicer_updates_review') }}" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% for s in slicers %}<input type="hidden" name="slicer_ids" value="{{ s.id }}">{% endfor %}
+  <input type="hidden" name="config_base" value="{{ config_base }}">
+  {% if batch %}<input type="hidden" name="batch" value="1">{% endif %}
+
+  <div class="field">
+    <label for="slicer_version">1. Slicer version</label>
+    <select id="slicer_version" name="slicer_version" class="input">
+      <option value="">No change</option>
+      {% for version in options.versions %}
+        <option value="{{ version }}"{% if version == update.slicer_version %} selected{% endif %}>{{ version }}</option>
+      {% endfor %}
+    </select>
+    <p class="field__help">Only versions available to every selected slicer are offered.</p>
+  </div>
+
+  <div class="field">
+    <label for="configuration">2. Configuration</label>
+    <textarea id="configuration" name="configuration" class="input updates-config" rows="16" spellcheck="false">{{ config_text }}</textarea>
+    {% if batch %}
+      <p class="field__help">
+        Starting from {{ config_source or 'the first slicer' }}. If you edit this, the text replaces the
+        configuration on every selected slicer, and each keeps its own <code>description</code> line.
+      </p>
+      {% if differing %}
+        <p class="field__help">
+          These slicers currently differ from this text: <span class="mono">{{ differing | join(', ') }}</span>.
+          Review shows exactly what would change.
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="field__help">If you edit this, the text replaces the slicer's whole configuration.</p>
+    {% endif %}
+  </div>
+
+  <div class="field">
+    <label for="encoding_profile_id">3. Encoding profile GUID</label>
+    <input id="encoding_profile_id" name="encoding_profile_id" class="input" type="text"
+           placeholder="No change" value="{{ update.encoding_profile_id }}" autocomplete="off">
+    <p class="field__help">If Uplynk rejects the GUID, the error appears in that slicer's result.</p>
+  </div>
+
+  <label class="updates-toggle">
+    <input type="checkbox" name="update_plugin" value="1"{% if update.plugin_id %} checked{% endif %}>
+    Update plugin
+  </label>
+  {% if options.plugins %}
+    <div class="field">
+      <label for="plugin">Plugin and version (applies only when Update plugin is ticked)</label>
+      <select id="plugin" name="plugin" class="input">
+        {% for plugin_id, versions in options.plugins.items() %}
+          <optgroup label="{{ plugin_id }}">
+            {% for version in versions %}
+              {% set value = plugin_id ~ '::' ~ version %}
+              <option value="{{ value }}"{% if value == update.plugin_value %} selected{% endif %}>{{ plugin_id }} v{{ version }}</option>
+            {% endfor %}
+          </optgroup>
+        {% endfor %}
+      </select>
+    </div>
+  {% else %}
+    <p class="field__help">No plugins are available to every selected slicer. If you expected some, contact Uplynk Support.</p>
+  {% endif %}
+
+  <div class="form-actions">
+    <button type="submit" class="button button--primary">Review changes</button>
+    <a class="button button--link" href="{{ url_for('admin.slicer_updates', slicer_ids=slicers | map(attribute='id') | list) }}">Back</a>
+  </div>
+</form>
+{% endblock %}

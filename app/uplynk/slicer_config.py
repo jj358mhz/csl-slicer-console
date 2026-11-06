@@ -90,3 +90,34 @@ def parse_configuration(text: str | None) -> list[tuple[str | None, str]]:
         else:
             rows.append((None, line))
     return rows
+
+
+def normalize_configuration(text: str | None) -> str:
+    """The configuration with browser line endings and edge whitespace removed.
+
+    Form fields submit CRLF, so compare and send this form, not the raw text.
+    """
+    lines = (text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return "\n".join(line.rstrip() for line in lines).strip("\n")
+
+
+def _is_description(line: str) -> bool:
+    key, sep, _ = line.partition(":")
+    return bool(sep) and key.strip() == "description"
+
+
+def description_line(text: str | None) -> str | None:
+    """The configuration's `description` line, if it has one."""
+    lines = normalize_configuration(text).split("\n")
+    return next((line for line in lines if _is_description(line)), None)
+
+
+def without_description(text: str | None) -> str:
+    """The configuration minus its `description` line: what a pool shares (#71)."""
+    lines = normalize_configuration(text).split("\n")
+    return "\n".join(line for line in lines if not _is_description(line))
+
+
+def with_description(shared: str, description: str | None) -> str:
+    """A slicer's full configuration: its own `description` line plus the shared text."""
+    return f"{description}\n{shared}" if description else shared

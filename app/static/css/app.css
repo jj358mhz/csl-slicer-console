@@ -25,6 +25,7 @@
    16. Slicer control actions & results
    17. Batch selection & floating action bar
    18. Modal (confirmation dialog)
+   19. Slicer Updates (admin)
    ============================================================================ */
 
 
@@ -1766,4 +1767,171 @@ form.inline {
 
 .config__settings td {
     color: var(--text);
+}
+
+
+/* ==========================================================================
+   19. Slicer Updates (admin)
+   ========================================================================== */
+
+.updates-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 0 0 24px;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+    color: var(--text-dim);
+}
+
+.updates-steps__step--current {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.updates-table-box {
+    overflow-x: auto;
+}
+
+.updates-table-box .data-table {
+    min-width: 760px;
+}
+
+.updates-row--blocked {
+    color: var(--text-dim);
+}
+
+.updates-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.updates-toggle input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+.updates-config {
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.updates-warning {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    border: 1px solid rgba(212, 170, 60, .5);
+    border-radius: var(--radius);
+    background: rgba(212, 170, 60, .1);
+}
+
+.updates-warning__title {
+    margin-bottom: 4px;
+    font-weight: 700;
+    color: #f1d27c;
+}
+
+.updates-slicer {
+    margin-bottom: 16px;
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.updates-slicer__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-bottom: 8px;
+}
+
+.updates-slicer__head h2 {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    color: var(--text-primary);
+}
+
+.updates-change {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 4px 12px;
+    padding: 4px 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.updates-change__after {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.updates-diff {
+    margin-top: 8px;
+    padding: 6px 0;
+    overflow-x: auto;
+    background: var(--surface-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+}
+
+.updates-diff__line {
+    padding: 1px 12px;
+    white-space: pre;
+}
+
+.updates-diff__line--removed {
+    background: rgba(224, 82, 82, .14);
+    color: #f8b4b4;
+}
+
+.updates-diff__line--added {
+    background: rgba(34, 197, 94, .13);
+    color: #a7f3c0;
+}
+
+.updates-badge--failed {
+    background: rgba(224, 82, 82, .14);
+    color: #f8a5a5;
+    border-color: rgba(224, 82, 82, .45);
+}
+
+.updates-status {
+    margin: 8px 0;
+    font-size: 13px;
+}
+
+.updates-status__heading {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.updates-status__meaning,
+.updates-status__action {
+    margin: 2px 0 0;
+    color: var(--text-muted);
+}
+
+.updates-status__message {
+    display: block;
+    margin-top: 6px;
+    padding: 6px 10px;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+    .updates-change {
+        grid-template-columns: 1fr;
+    }
 }
