@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% import "admin/_slicer_updates.html" as ui %}
+{% block title_suffix %} — Slicer Updates{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Slicer Updates</h1>
+  <span class="badge">Admin only</span>
+</div>
+{{ ui.steps(step) }}
+
+{% set pks = slicers | map(attribute='id') | list %}
+<form method="post" action="{{ url_for('admin.slicer_updates_apply') }}">
+  {{ ui.carried_fields(pks, update) }}
+
+  {% if restarts %}
+    <div class="updates-warning" role="alert">
+      <div class="updates-warning__title">
+        {{ restarts | length }} running slicer{% if restarts | length != 1 %}s{% endif %} will restart
+      </div>
+      <div class="mono">{{ restarts | map(attribute='slicer_id') | join(', ') }}</div>
+      {% for plan in restarts %}<input type="hidden" name="restart_ids" value="{{ plan.pk }}">{% endfor %}
+      <label class="updates-toggle">
+        <input type="checkbox" name="confirm_restart" value="1" required>
+        I understand these slicers will restart
+      </label>
+    </div>
+  {% endif %}
+
+  {% for plan in plans %}
+    <section class="updates-slicer">
+      <div class="updates-slicer__head">
+        <h2>{{ plan.slicer_id }}</h2>
+        {% if not plan.error %}{{ ui.state_badge(plan.state) }}{% endif %}
+        {% if plan.skipped %}<span class="muted">No changes, so nothing is sent</span>{% endif %}
+      </div>
+      {% if plan.error %}
+        <div class="flash flash--error">Couldn't read this slicer's current settings, so it won't be updated: {{ plan.error }}</div>
+      {% endif %}
+      {{ ui.changes(plan) }}
+    </section>
+  {% endfor %}
+
+  <div class="form-actions">
+    <button type="submit" class="button button--primary"{% if not sending %} disabled{% endif %}>
+      Apply to {{ sending }} slicer{% if sending != 1 %}s{% endif %}
+    </button>
+    <button type="submit" class="button button--link" formaction="{{ url_for('admin.slicer_updates_edit') }}" formnovalidate>Back</button>
+  </div>
+</form>
+{% endblock %}

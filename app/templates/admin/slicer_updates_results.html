@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "admin/_slicer_updates.html" as ui %}
+{% block title_suffix %} — Slicer Updates{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Slicer Updates</h1>
+  <span class="badge">Admin only</span>
+</div>
+{{ ui.steps(step) }}
+
+<p role="status">
+  <strong>
+    {{ counts.updated }} updated{% if counts.failed %} · {{ counts.failed }} failed{% endif %}{% if counts.not_sent %} · {{ counts.not_sent }} not sent{% endif %}{% if counts.skipped %} · {{ counts.skipped }} skipped{% endif %}
+  </strong>
+</p>
+
+{% for r in results %}
+  <section class="updates-slicer">
+    <div class="updates-slicer__head">
+      <h2>{{ r.plan.slicer_id }}</h2>
+      {% if r.status == 'updated' %}
+        <span class="badge badge--active">Updated</span>
+      {% elif r.status == 'failed' %}
+        <span class="badge updates-badge--failed">Failed</span>
+      {% elif r.status == 'not_sent' %}
+        <span class="badge updates-badge--failed">Not sent</span>
+      {% else %}
+        <span class="badge">Skipped</span>
+      {% endif %}
+    </div>
+    {% if r.status == 'skipped' %}
+      <p class="muted">Already has these settings, so nothing was sent.</p>
+    {% else %}
+      <div class="updates-status">
+        <div class="updates-status__heading">{{ r.explanation.heading }}</div>
+        <p class="updates-status__meaning">{{ r.explanation.meaning }}</p>
+        <p class="updates-status__action">{{ r.explanation.action }}</p>
+        {% if r.explanation.uplynk_message %}
+          <code class="updates-status__message">Uplynk said: {{ r.explanation.uplynk_message }}</code>
+        {% endif %}
+      </div>
+      {{ ui.changes(r.plan) }}
+    {% endif %}
+  </section>
+{% endfor %}
+
+<p class="field__help">Each attempt is recorded in the audit log with the old and new values.</p>
+
+<div class="form-actions">
+  {% if retry_ids %}
+    <form method="post" action="{{ url_for('admin.slicer_updates_apply') }}" class="inline">
+      {{ ui.carried_fields(retry_ids, update) }}
+      {% if confirmed %}
+        <input type="hidden" name="confirm_restart" value="1">
+        {% for pk in confirmed %}<input type="hidden" name="restart_ids" value="{{ pk }}">{% endfor %}
+      {% endif %}
+      <button type="submit" class="button button--primary">Retry {{ retry_ids | length }} not updated</button>
+    </form>
+  {% endif %}
+  <a class="button button--link" href="{{ url_for('admin.slicer_updates') }}">Start a new update</a>
+</div>
+{% endblock %}

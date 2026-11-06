@@ -43,6 +43,13 @@ control buttons, and full audit trails.
   starts (including a re-initialize) and stored encrypted, so it's never
   re-queried during a run; a **Refresh** button pulls it on demand. After a
   stop it stays visible, marked "From last run".
+- 🛠️ **Slicer Updates** — an admin-only tab that changes slicer version,
+  configuration, encoding profile and optionally plugin, on one slicer or a
+  batch. Reads current settings from Uplynk, shows a diff to review, asks
+  before restarting running slicers, keeps each slicer's `description` line in
+  a batch, and explains each result's HTTP status with a retry. Needs a key
+  with `video.services.ingest.slicer.cloudslicer.live:write`; accounts without
+  it get a warning.
 - ✅ **Batch operations** — checkbox per card, section select-all, floating
   action bar, parallel fire against selected slicers, confirmation modal
   for state-changing actions, even on a single selected slicer.

@@ -1,0 +1,711 @@
+"""Tests for Slicer Updates (#71): explanations, planning, routes and audit."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+import pytest
+import requests
+
+from app.crypto import decrypt, encrypt
+from app.models import AuditEvent, Slicer, UplynkAccount, User, db
+from app.slicers import updates
+from app.uplynk.discovery import UplynkAPIError, UplynkDiscoveryClient
+from app.uplynk.slicer_config import (
+    SlicerConfig,
+    description_line,
+    normalize_configuration,
+    with_description,
+    without_description,
+)
+from app.uplynk.target_state import TargetStateResult, patch_slicer
+from app.uplynk.update_status import (
+    WRITE_SCOPE,
+    explain_no_response,
+    explain_status,
+    has_write_scope,
+    uplynk_message,
+)
+
+READ_SCOPE = "video.services.ingest.slicer.cloudslicer.live:read"
+GUID_A = "5343a6ce3dfb4646b8900a372b15ac1d"
+GUID_B = "cd234daa8a57469faf46ff06ceada771"
+SHARED = "drm_mode:studio\ngain:0.0\npids:100,101"
+
+
+def _config_text(name, shared=SHARED):
+    return f"description:{name}\n{shared}\n"
+
+
+def _config(name="one", version="260604.03.01", profile=GUID_A, shared=SHARED, **kw):
+    return SlicerConfig(
+        slicer_version=version,
+        encoding_profile_id=profile,
+        configuration=_config_text(name, shared),
+        passphrase="secret-pass",
+        **kw,
+    )
+
+
+# ---------------------------------------------------------------------------
+# HTTP explanations and the scope check
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("scp", "expected"),
+    [
+        (None, False),
+        ("", False),
+        (READ_SCOPE, False),
+        (f"{READ_SCOPE},{WRITE_SCOPE}", True),
+        (f"{READ_SCOPE} , {WRITE_SCOPE} ", True),
+        ("video.services.slicer.cloudslicer.live:write", True),
+        ("video.services.other:write", False),
+    ],
+)
+def test_has_write_scope(scp, expected):
+    assert has_write_scope(scp) is expected
+
+
+@pytest.mark.parametrize(
+    ("code", "heading", "words"),
+    [
+        (400, "HTTP 400 Bad Request", "nothing changed"),
+        (401, "HTTP 401 Unauthorized", "Acct"),
+        (403, "HTTP 403 Forbidden", WRITE_SCOPE),
+        (404, "HTTP 404 Not Found", "deleted or renamed"),
+        (422, "HTTP 422 Unprocessable Content", "encoding profile GUID"),
+        (429, "HTTP 429 Too Many Requests", "Wait a minute"),
+        (502, "HTTP 502 Bad Gateway", "may or may not have applied"),
+        (418, "HTTP 418", "refused"),
+    ],
+)
+def test_explains_each_failure(code, heading, words):
+    explained = explain_status(code, {"msg": "from uplynk"}, account_label="Acct", running=False)
+    assert explained.heading.startswith(heading)
+    assert words in f"{explained.meaning} {explained.action}"
+    assert explained.uplynk_message == "from uplynk"
+
+
+def test_401_explains_an_out_of_date_key():
+    explained = explain_status(
+        401, {"error": 1, "msg": "Not entitled"}, account_label="dma_meade-dev", running=True
+    )
+    assert "Scoped API Keys" in explained.action
+    assert "dma_meade-dev" in explained.action
+    assert explained.uplynk_message == "Not entitled"
+
+
+def test_success_says_whether_the_slicer_restarts():
+    running = explain_status(200, {}, account_label="A", running=True)
+    stopped = explain_status(200, {}, account_label="A", running=False)
+    assert "restarting" in running.action
+    assert "next start" in stopped.action
+
+
+def test_no_response_says_it_may_have_applied():
+    explained = explain_no_response("Request to Uplynk failed: timeout")
+    assert "may or may not" in explained.meaning
+    assert "reads the current settings first" in explained.action
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ({"msg": "Not entitled", "error": 1}, "Not entitled"),
+        ({"description": "bad guid", "title": "Oops"}, "bad guid"),
+        ({"error": 1}, None),
+        ("plain words", "plain words"),
+        ("<html>502</html>", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_uplynk_message(body, expected):
+    assert uplynk_message(body) == expected
+
+
+# ---------------------------------------------------------------------------
+# Configuration helpers
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_configuration_handles_browser_line_endings():
+    assert normalize_configuration("a:1  \r\nb:2\r\n\r\n") == "a:1\nb:2"
+    assert normalize_configuration(None) == ""
+
+
+def test_description_helpers():
+    text = "description: My Slicer\npids:1,2\ndescriptive:no\n"
+    assert description_line(text) == "description: My Slicer"
+    assert without_description(text) == "pids:1,2\ndescriptive:no"
+    assert description_line("pids:1") is None
+    assert with_description("pids:1", "description:x") == "description:x\npids:1"
+    assert with_description("pids:1", None) == "pids:1"
+
+
+# ---------------------------------------------------------------------------
+# Planning
+# ---------------------------------------------------------------------------
+
+
+def _target():
+    return updates._Target(1, "s1", "Acct", "us-east-1")
+
+
+def test_plan_only_sends_what_changed():
+    update = updates.UpdateRequest(
+        slicer_version="260604.03.01",
+        encoding_profile_id=GUID_B,
+        configuration="same",
+        config_base="same",
+    )
+    plan = updates.build_plan(_target(), "Stopped", _config(), update)
+    assert plan.fields == {"encoding_profile_id": GUID_B}
+    assert [c.field for c in plan.changes] == ["encoding_profile_id"]
+    assert not plan.restarts
+
+
+def test_plan_with_nothing_different_is_skipped_and_never_restarts():
+    update = updates.UpdateRequest(
+        slicer_version="260604.03.01", configuration="same", config_base="same"
+    )
+    plan = updates.build_plan(_target(), "Slicing", _config(), update)
+    assert plan.skipped
+    assert plan.running
+    assert not plan.restarts
+
+
+def test_batch_config_keeps_each_slicers_description():
+    edited = SHARED.replace("gain:0.0", "gain:1.0")
+    update = updates.UpdateRequest(configuration=edited, config_base=SHARED, batch=True)
+    plan = updates.build_plan(_target(), "Stopped", _config("own-name"), update)
+    assert plan.fields["configuration"] == f"description:own-name\n{edited}\n"
+    assert [(d.removed, d.text) for d in plan.diff] == [(True, "gain:0.0"), (False, "gain:1.0")]
+
+
+def test_batch_config_ignores_a_description_typed_into_the_box():
+    typed = f"description:everyone\n{SHARED}\nnew:1"
+    update = updates.UpdateRequest(configuration=typed, config_base=SHARED, batch=True)
+    plan = updates.build_plan(_target(), "Stopped", _config("own-name"), update)
+    assert plan.fields["configuration"] == f"description:own-name\n{SHARED}\nnew:1\n"
+
+
+def test_batch_config_shows_other_settings_it_would_overwrite():
+    different = SHARED.replace("pids:100,101", "pids:200,201")
+    edited = SHARED.replace("gain:0.0", "gain:1.0")
+    update = updates.UpdateRequest(configuration=edited, config_base=SHARED, batch=True)
+    plan = updates.build_plan(_target(), "Stopped", _config(shared=different), update)
+    assert {d.text for d in plan.diff} >= {"pids:200,201", "pids:100,101"}
+
+
+def test_single_slicer_config_can_change_its_description():
+    current = _config_text("old").rstrip("\n")
+    edited = current.replace("description:old", "description:new")
+    update = updates.UpdateRequest(configuration=edited, config_base=current)
+    plan = updates.build_plan(_target(), "Stopped", _config("old"), update)
+    assert plan.fields["configuration"] == f"{edited}\n"
+
+
+def test_plan_changes_plugin_only_when_different():
+    update = updates.UpdateRequest(
+        plugin_id="scte-wma", plugin_version="1.2.0", configuration="x", config_base="x"
+    )
+    plan = updates.build_plan(_target(), "Stopped", _config(), update)
+    assert plan.fields["plugin"] == {"id": "scte-wma", "version": "1.2.0"}
+    assert plan.changes[0].before == "none"
+
+    same = _config(plugin_id="scte-wma", plugin_version="1.2.0")
+    assert updates.build_plan(_target(), "Stopped", same, update).skipped
+
+
+def test_request_ignores_plugin_unless_toggled():
+    off = updates.UpdateRequest.from_form({"plugin": "scte-wma::1.2.0"})
+    on = updates.UpdateRequest.from_form({"plugin": "scte-wma::1.2.0", "update_plugin": "1"})
+    assert off.plugin_id == ""
+    assert (on.plugin_id, on.plugin_version) == ("scte-wma", "1.2.0")
+
+
+# ---------------------------------------------------------------------------
+# Uplynk clients
+# ---------------------------------------------------------------------------
+
+
+def _response(status_code=200, json_data=None):
+    mock = MagicMock(spec=requests.Response)
+    mock.status_code = status_code
+    mock.text = str(json_data)
+    mock.json.return_value = json_data
+    return mock
+
+
+def _client(ec_keypair, session):
+    return UplynkDiscoveryClient(
+        api_base="https://services.uplynk.com",
+        kid="k",
+        sub="s",
+        private_b64=ec_keypair["private_b64"],
+        scp=READ_SCOPE,
+        session=session,
+    )
+
+
+def test_patch_slicer_sends_the_given_fields(ec_keypair):
+    session = MagicMock()
+    session.patch.return_value = _response(200, {"id": "s1"})
+    result = patch_slicer(
+        "https://services.uplynk.com",
+        "s1",
+        {"slicer_version": "v"},
+        kid="k",
+        sub="s",
+        private_b64=ec_keypair["private_b64"],
+        scp=WRITE_SCOPE,
+        session=session,
+    )
+    assert result.ok
+    args, kwargs = session.patch.call_args
+    assert args[0].endswith("/cloud-slicers/live/slicers/s1")
+    assert kwargs["json"] == {"slicer_version": "v"}
+
+
+def test_list_versions_filters_by_region_newest_first(ec_keypair):
+    session = MagicMock()
+    session.get.return_value = _response(
+        200, {"items": [{"id": "240304.05.01"}, {"id": "260604.03.01"}, {"id": "250210.04.01"}]}
+    )
+    versions = _client(ec_keypair, session).list_versions("us-east-1")
+    assert versions == ["260604.03.01", "250210.04.01", "240304.05.01"]
+    assert session.get.call_args.kwargs["params"] == {"region": "us-east-1"}
+    assert session.get.call_args.args[0].endswith("/slicers/versions")
+
+
+def test_list_plugins_newest_version_first(ec_keypair):
+    session = MagicMock()
+    session.get.return_value = _response(
+        200, {"items": [{"id": "scte-wma", "versions": [{"version": "1.0"}, {"version": "1.2"}]}]}
+    )
+    assert _client(ec_keypair, session).list_plugins() == {"scte-wma": ["1.2", "1.0"]}
+
+
+def test_list_endpoint_errors_raise(ec_keypair):
+    session = MagicMock()
+    session.get.return_value = _response(403, {"code": "forbidden"})
+    with pytest.raises(UplynkAPIError, match="HTTP 403"):
+        _client(ec_keypair, session).list_plugins()
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+
+def _login(client, email="test@example.com", password="test-password-123"):
+    return client.post("/auth/login", data={"email": email, "password": password})
+
+
+def _account(label="Acct", scp=f"{READ_SCOPE},{WRITE_SCOPE}", key="key"):
+    acct = UplynkAccount(
+        label=label,
+        workspace_id=f"ws-{label}",
+        legacy_api_key_encrypted=encrypt("k"),
+        scoped_kid="kid",
+        scoped_sub="sub",
+        scoped_private_b64_encrypted=encrypt(key),
+        scoped_scp=scp,
+    )
+    db.session.add(acct)
+    db.session.flush()
+    return acct
+
+
+def _slicer(account, slicer_id, state="Stopped", region="us-east-1"):
+    slicer = Slicer(
+        uplynk_account_id=account.id,
+        slicer_id=slicer_id,
+        slicer_api_url=f"https://ingest.example.com/{slicer_id}",
+        is_active=True,
+        last_state=state,
+        region=region,
+    )
+    db.session.add(slicer)
+    db.session.commit()
+    return slicer.id
+
+
+@pytest.fixture
+def uplynk(monkeypatch):
+    """Fake Uplynk: settings per slicer, and scripted PATCH responses."""
+
+    class Fake:
+        settings: dict = {}
+        states: dict = {}
+        responses: dict = {}
+        unreadable: dict = {}
+        patches: list = []
+
+    fake = Fake()
+    fake.settings, fake.states, fake.responses, fake.unreadable, fake.patches = {}, {}, {}, {}, []
+
+    def snapshot(self, slicer_id):
+        if slicer_id in fake.unreadable:
+            raise UplynkAPIError(fake.unreadable[slicer_id])
+        return fake.states.get(slicer_id, "Stopped"), fake.settings[slicer_id]
+
+    def patch(api_base, slicer_id, fields, **kwargs):
+        fake.patches.append((slicer_id, fields))
+        response = fake.responses.get(slicer_id)
+        if isinstance(response, Exception):
+            raise response
+        if response is not None:
+            return response
+        body = {"id": slicer_id, "configuration": fields.get("configuration", "kept")}
+        return TargetStateResult(200, body, True)
+
+    monkeypatch.setattr(UplynkDiscoveryClient, "retrieve_slicer_snapshot", snapshot)
+    monkeypatch.setattr(
+        UplynkDiscoveryClient, "list_versions", lambda self, region=None: ["260604.03.01", "v2"]
+    )
+    monkeypatch.setattr(
+        UplynkDiscoveryClient, "list_plugins", lambda self: {"scte-wma": ["1.2.0", "1.0.0"]}
+    )
+    monkeypatch.setattr(updates, "patch_slicer", patch)
+    return fake
+
+
+def _apply(client, pks, **fields):
+    data = {
+        "slicer_ids": pks,
+        "configuration": SHARED,
+        "config_base": SHARED,
+        "batch": "1" if len(pks) > 1 else "",
+    }
+    data.update(fields)
+    return client.post("/admin/slicer-updates/apply", data=data)
+
+
+def test_requires_login(client):
+    assert client.get("/admin/slicer-updates").status_code in (302, 401)
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("get", "/admin/slicer-updates"),
+        ("post", "/admin/slicer-updates/edit"),
+        ("post", "/admin/slicer-updates/review"),
+        ("post", "/admin/slicer-updates/apply"),
+    ],
+)
+def test_regular_users_are_refused(app, client, uplynk, method, path):
+    from app.auth.passwords import hash_password
+
+    db.session.add(
+        User(email="user@example.com", password_hash=hash_password("user-password"), is_admin=False)
+    )
+    db.session.commit()
+    _login(client, "user@example.com", "user-password")
+    assert getattr(client, method)(path).status_code == 403
+    assert uplynk.patches == []
+
+
+def test_nav_link_only_for_admins(app, client):
+    from app.auth.passwords import hash_password
+
+    db.session.add(
+        User(email="user@example.com", password_hash=hash_password("user-password"), is_admin=False)
+    )
+    db.session.commit()
+    _login(client, "user@example.com", "user-password")
+    assert "/admin/slicer-updates" not in client.get("/").get_data(as_text=True)
+    client.post("/auth/logout")
+    _login(client)
+    assert "/admin/slicer-updates" in client.get("/").get_data(as_text=True)
+
+
+def test_select_lists_slicers_and_warns_about_read_only_keys(app, client):
+    good = _account("Good")
+    bad = _account("ReadOnly", scp=READ_SCOPE)
+    _slicer(good, "writable")
+    blocked_pk = _slicer(bad, "blocked")
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert "writable" in body
+    assert f"The key saved for ReadOnly doesn&#39;t list {WRITE_SCOPE}" in body
+    row = body[body.index(f'value="{blocked_pk}"') :][:200]
+    assert "disabled" in row
+
+
+def test_edit_fetches_current_settings_and_shows_differences(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {
+        "a": _config("a"),
+        "b": _config("b", shared=SHARED.replace("gain:0.0", "gain:3.0")),
+    }
+    _login(client)
+    body = client.post("/admin/slicer-updates/edit", data={"slicer_ids": pks}).get_data(
+        as_text=True
+    )
+    assert "gain:0.0" in body
+    assert "description:a" not in body
+    assert "These slicers currently differ" in body
+    assert 'name="batch" value="1"' in body
+    assert "scte-wma v1.2.0" in body
+    assert ">v2</option>" in body
+
+
+def test_edit_shows_the_description_for_a_single_slicer(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    _login(client)
+    body = client.post("/admin/slicer-updates/edit", data={"slicer_ids": [pk]}).get_data(
+        as_text=True
+    )
+    assert "description:a" in body
+    assert 'name="batch"' not in body
+
+
+def test_edit_leaves_out_blocked_accounts(app, client, uplynk):
+    pk = _slicer(_account("ReadOnly", scp=READ_SCOPE), "a")
+    _login(client)
+    response = client.post("/admin/slicer-updates/edit", data={"slicer_ids": [pk]})
+    assert response.status_code == 302
+
+
+def test_review_requires_a_change(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    text = _config_text("a").rstrip("\n")
+    _login(client)
+    body = client.post(
+        "/admin/slicer-updates/review",
+        data={"slicer_ids": [pk], "configuration": text, "config_base": text},
+    ).get_data(as_text=True)
+    assert "Change at least one setting" in body
+
+
+def test_review_refuses_to_empty_the_configuration(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    _login(client)
+    body = client.post(
+        "/admin/slicer-updates/review",
+        data={"slicer_ids": [pk], "configuration": "  \r\n", "config_base": SHARED},
+    ).get_data(as_text=True)
+    assert "can&#39;t be empty" in body
+    assert uplynk.patches == []
+
+
+def test_review_names_restarts_and_skips(app, client, uplynk):
+    acct = _account()
+    running, stopped, same = _slicer(acct, "run"), _slicer(acct, "stop"), _slicer(acct, "same")
+    uplynk.settings = {
+        "run": _config("run"),
+        "stop": _config("stop"),
+        "same": _config("same", version="v2"),
+    }
+    uplynk.states = {"run": "Slicing", "same": "Slicing"}
+    _login(client)
+    body = client.post(
+        "/admin/slicer-updates/review",
+        data={
+            "slicer_ids": [running, stopped, same],
+            "slicer_version": "v2",
+            "configuration": SHARED,
+            "config_base": SHARED,
+        },
+    ).get_data(as_text=True)
+    assert "1 running slicer will restart" in body
+    assert f'name="restart_ids" value="{running}"' in body
+    assert f'name="restart_ids" value="{same}"' not in body
+    assert "No changes, so nothing is sent" in body
+    assert "Apply to 2 slicers" in body
+    assert uplynk.patches == []
+
+
+def test_apply_continues_past_a_failure_and_explains_it(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b"), _slicer(acct, "c")]
+    uplynk.settings = {name: _config(name) for name in "abc"}
+    uplynk.responses = {"b": TargetStateResult(401, {"error": 1, "msg": "Not entitled"}, False)}
+    _login(client)
+    body = _apply(client, pks, encoding_profile_id=GUID_B).get_data(as_text=True)
+    assert sorted(p[0] for p in uplynk.patches) == ["a", "b", "c"]
+    assert "2 updated · 1 failed" in body
+    assert "HTTP 401 Unauthorized" in body
+    assert "Not entitled" in body
+    assert "Scoped API Keys" in body
+    assert "HTTP 200 OK" in body
+    assert f"{GUID_A}</span> → <span" in body
+    assert "Retry 1 not updated" in body
+
+
+def test_retry_keeps_batch_mode_for_a_single_failed_slicer(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {"a": _config("a"), "b": _config("b")}
+    uplynk.responses = {"b": TargetStateResult(500, "oops", False)}
+    _login(client)
+    edited = SHARED.replace("gain:0.0", "gain:1.0")
+    body = _apply(client, pks, configuration=edited).get_data(as_text=True)
+    assert body.count('name="batch" value="1"') == 1
+
+    uplynk.responses, uplynk.patches = {}, []
+    _apply(client, [pks[1]], configuration=edited, batch="1")
+    assert uplynk.patches[0][1]["configuration"] == f"description:b\n{edited}\n"
+
+
+def test_apply_network_failure_says_it_may_have_applied(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    uplynk.responses = {"a": UplynkAPIError("Request to Uplynk failed: timeout")}
+    _login(client)
+    body = _apply(client, [pk], slicer_version="v2").get_data(as_text=True)
+    assert "No response from Uplynk" in body
+    assert "may or may not have applied" in body
+    event = db.session.query(AuditEvent).one()
+    assert event.status_code is None
+
+
+def test_apply_retry_sends_nothing_if_it_already_applied(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a", version="v2")}
+    _login(client)
+    body = _apply(client, [pk], slicer_version="v2").get_data(as_text=True)
+    assert uplynk.patches == []
+    assert "1 skipped" in body
+    assert db.session.query(AuditEvent).count() == 0
+
+
+def test_apply_will_not_restart_without_confirmation(app, client, uplynk):
+    pk = _slicer(_account(), "a", state="Stopped")
+    uplynk.settings = {"a": _config("a")}
+    uplynk.states = {"a": "Slicing"}
+    _login(client)
+    body = _apply(client, [pk], slicer_version="v2").get_data(as_text=True)
+    assert uplynk.patches == []
+    assert "started running after the review" in body
+
+
+def test_apply_restarts_a_confirmed_slicer(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    uplynk.states = {"a": "Slicing"}
+    _login(client)
+    body = _apply(
+        client, [pk], slicer_version="v2", confirm_restart="1", restart_ids=[pk]
+    ).get_data(as_text=True)
+    assert uplynk.patches == [("a", {"slicer_version": "v2"})]
+    assert "restarting" in body
+    assert db.session.get(Slicer, pk).config_capture_pending is True
+
+
+def test_apply_ignores_restart_ids_without_the_checkbox(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    uplynk.states = {"a": "Slicing"}
+    _login(client)
+    _apply(client, [pk], slicer_version="v2", restart_ids=[pk])
+    assert uplynk.patches == []
+
+
+def test_apply_reports_a_slicer_it_cannot_read(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {"b": _config("b")}
+    uplynk.unreadable = {"a": "Slicer 'a' not found"}
+    _login(client)
+    body = _apply(client, pks, slicer_version="v2").get_data(as_text=True)
+    assert [p[0] for p in uplynk.patches] == ["b"]
+    assert "1 updated · 1 not sent" in body
+    assert "Slicer &#39;a&#39; not found" in body
+
+
+def test_apply_reports_slicers_it_ran_out_of_time_for(app, client, uplynk, monkeypatch):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    monkeypatch.setattr(updates, "NETWORK_BUDGET_SECONDS", -1)
+    _login(client)
+    body = _apply(client, [pk], slicer_version="v2").get_data(as_text=True)
+    assert uplynk.patches == []
+    assert "Not reached in time" in body
+    assert "Retry 1 not updated" in body
+
+
+def test_apply_audits_old_and_new_values(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    edited = SHARED.replace("gain:0.0", "gain:1.0")
+    _login(client)
+    _apply(
+        client,
+        [pk],
+        slicer_version="v2",
+        configuration=edited,
+        batch="1",
+    )
+    event = db.session.query(AuditEvent).one()
+    assert event.method == updates.AUDIT_METHOD
+    assert event.status_code == 200
+    assert event.slicer_id == pk
+    assert "slicer_version: 260604.03.01 → v2" in event.response_snippet
+    assert "-gain:0.0; +gain:1.0" in event.response_snippet
+    assert "secret-pass" not in event.response_snippet
+
+
+def test_apply_stores_the_updated_settings(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    edited = _config_text("a", SHARED.replace("gain:0.0", "gain:1.0")).rstrip("\n")
+    _login(client)
+    _apply(client, [pk], configuration=edited, config_base=_config_text("a").rstrip("\n"), batch="")
+    slicer = db.session.get(Slicer, pk)
+    stored = SlicerConfig.from_json(decrypt(slicer.config_encrypted))
+    assert stored.configuration == f"{edited}\n"
+    assert slicer.config_source == "update"
+    assert slicer.config_capture_pending is False
+    assert slicer.config_caption.startswith("Updated from the console")
+
+
+def test_failed_update_leaves_the_stored_settings_alone(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    uplynk.responses = {"a": TargetStateResult(422, {"description": "bad"}, False)}
+    _login(client)
+    _apply(client, [pk], slicer_version="v2")
+    slicer = db.session.get(Slicer, pk)
+    assert slicer.config_encrypted is None
+    assert slicer.config_source is None
+
+
+def test_mixed_batch_only_offers_shared_options(app, client, uplynk, monkeypatch):
+    def versions(self, region=None):
+        return ["v3", "v2"] if region == "us-east-1" else ["v2", "v1"]
+
+    monkeypatch.setattr(UplynkDiscoveryClient, "list_versions", versions)
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b", region="us-west-2")]
+    uplynk.settings = {"a": _config("a"), "b": _config("b")}
+    _login(client)
+    body = client.post("/admin/slicer-updates/edit", data={"slicer_ids": pks}).get_data(
+        as_text=True
+    )
+    assert ">v2</option>" in body
+    assert ">v3</option>" not in body
+    assert ">v1</option>" not in body
+
+
+def test_edit_warns_when_options_cannot_be_listed(app, client, uplynk, monkeypatch):
+    def fail(self, region=None):
+        raise UplynkAPIError("Uplynk API returned HTTP 500: boom")
+
+    monkeypatch.setattr(UplynkDiscoveryClient, "list_versions", fail)
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    _login(client)
+    body = client.post("/admin/slicer-updates/edit", data={"slicer_ids": [pk]}).get_data(
+        as_text=True
+    )
+    assert "Couldn&#39;t list versions for Acct" in body

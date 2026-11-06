@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% import "admin/_slicer_updates.html" as ui %}
+{% block title_suffix %} — Slicer Updates{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Slicer Updates</h1>
+  <span class="badge">Admin only</span>
+</div>
+{{ ui.steps(step) }}
+
+{% for problem in account_problems %}
+  <div class="updates-warning" role="alert">
+    <div class="updates-warning__title">Can't update this account's slicers</div>
+    {{ problem }}
+  </div>
+{% endfor %}
+
+{% if rows %}
+<form method="post" action="{{ url_for('admin.slicer_updates_edit') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="field">
+    <label for="updates-filter">Filter slicers</label>
+    <input id="updates-filter" class="input" type="text" placeholder="Type part of a slicer ID">
+  </div>
+  <div class="updates-table-box">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th><input id="updates-all" type="checkbox" aria-label="Select all shown slicers"></th>
+          <th>Slicer</th>
+          <th>State</th>
+          <th>Region</th>
+          <th>Version</th>
+          <th>Encoding profile</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s, config in rows %}
+          {% set blocked = problems[s.uplynk_account_id] %}
+          <tr data-slicer-row data-slicer-id="{{ s.slicer_id | lower }}"{% if blocked %} class="updates-row--blocked"{% endif %}>
+            <td>
+              <input type="checkbox" name="slicer_ids" value="{{ s.id }}"
+                     aria-label="Select {{ s.slicer_id }}"
+                     {% if s.id in selected and not blocked %}checked{% endif %}
+                     {% if blocked %}disabled{% endif %}>
+            </td>
+            <td>
+              <div class="mono"><strong>{{ s.slicer_id }}</strong></div>
+              <div class="muted">{{ s.uplynk_account.label }}</div>
+            </td>
+            <td>{{ ui.state_badge(s.last_state) }}</td>
+            <td>{{ s.region or '—' }}</td>
+            <td class="mono">{{ config.slicer_version if config and config.slicer_version else '—' }}</td>
+            <td class="mono">
+              {% if config and config.encoding_profile_id %}
+                <span title="{{ config.encoding_profile_id }}">{{ config.encoding_profile_id[:8] }}…{{ config.encoding_profile_id[-4:] }}</span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="field__help">These are the last captured values. Current settings are fetched from Uplynk when you continue.</p>
+  <div class="form-actions">
+    <button type="submit" class="button button--primary" id="updates-continue">Edit selected slicers</button>
+  </div>
+</form>
+<script>
+  (function () {
+    var filter = document.getElementById('updates-filter');
+    var all = document.getElementById('updates-all');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('[data-slicer-row]'));
+    var boxes = function (shownOnly) {
+      return rows.filter(function (row) { return !shownOnly || !row.hidden; })
+        .map(function (row) { return row.querySelector('input[type=checkbox]'); })
+        .filter(function (box) { return !box.disabled; });
+    };
+    var sync = function () {
+      var shown = boxes(true);
+      all.checked = shown.length > 0 && shown.every(function (box) { return box.checked; });
+      var count = boxes(false).filter(function (box) { return box.checked; }).length;
+      var button = document.getElementById('updates-continue');
+      button.disabled = count === 0;
+      button.textContent = count === 1 ? 'Edit 1 slicer' : count ? 'Edit ' + count + ' slicers' : 'Edit selected slicers';
+    };
+    filter.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') event.preventDefault();
+    });
+    filter.addEventListener('input', function () {
+      var needle = filter.value.trim().toLowerCase();
+      rows.forEach(function (row) { row.hidden = row.dataset.slicerId.indexOf(needle) === -1; });
+      sync();
+    });
+    all.addEventListener('change', function () {
+      boxes(true).forEach(function (box) { box.checked = all.checked; });
+      sync();
+    });
+    boxes(false).forEach(function (box) { box.addEventListener('change', sync); });
+    sync();
+  })();
+</script>
+{% else %}
+  <div class="card"><p class="muted">No active slicers.</p></div>
+{% endif %}
+{% endblock %}

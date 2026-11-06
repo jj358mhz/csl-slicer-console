@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from flask import Blueprint, abort, flash, redirect, render_template, url_for
+from dataclasses import replace
+
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from app.admin.audit import log_admin_event
@@ -11,7 +13,10 @@ from app.admin.forms import UplynkAccountForm, UserForm, UserSlicerAssignmentFor
 from app.auth.passwords import hash_password
 from app.crypto import decrypt, encrypt, mask
 from app.models import Slicer, UplynkAccount, User, db
+from app.slicers import updates
+from app.slicers.service import stored_config
 from app.uplynk.scoped_env import ScopedEnvParseError, parse_scoped_env
+from app.uplynk.slicer_config import normalize_configuration, without_description
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -498,3 +503,139 @@ def delete_slicer(slicer_id_pk: int):
     log_admin_event("slicer", "delete", f"Deleted manual slicer '{name}'", target=name)
     flash(f"Slicer '{name}' deleted.", "info")
     return redirect(url_for("admin.list_slicers"))
+
+
+# ---------------------------------------------------------------------------
+# Slicer Updates (#71): select, edit, review, apply. Each step is a POST that
+# carries the request forward in hidden fields, and re-reads the slicers from
+# Uplynk, so nothing is held on the server between steps.
+# ---------------------------------------------------------------------------
+
+
+def _posted_pks(name: str = "slicer_ids") -> list[int]:
+    return [int(v) for v in request.values.getlist(name) if v.isdigit()]
+
+
+@bp.route("/slicer-updates")
+@admin_required
+def slicer_updates():
+    slicers = updates.list_updatable_slicers()
+    rows = [(s, stored_config(s)) for s in slicers]
+    problems = {
+        s.uplynk_account_id: updates.account_write_problem(s.uplynk_account) for s in slicers
+    }
+    return render_template(
+        "admin/slicer_updates_select.html",
+        step=1,
+        rows=rows,
+        problems=problems,
+        account_problems=sorted({p for p in problems.values() if p}),
+        selected=set(_posted_pks()),
+    )
+
+
+def _updatable_selection() -> list[Slicer]:
+    """The posted slicers whose accounts can be updated, flashing about the rest."""
+    slicers = updates.selected_slicers(_posted_pks())
+    usable = [s for s in slicers if not updates.account_write_problem(s.uplynk_account)]
+    if len(usable) < len(slicers):
+        flash("Slicers on accounts without a write key were left out.", "error")
+    return usable
+
+
+def _posted_update(slicers: list[Slicer]) -> updates.UpdateRequest:
+    """The posted request. More than one slicer is always a batch, whatever was posted."""
+    update = updates.UpdateRequest.from_form(request.form)
+    return replace(update, batch=True) if len(slicers) > 1 else update
+
+
+def _render_edit(slicers: list[Slicer], update: updates.UpdateRequest, error: str | None = None):
+    batch = update.batch or len(slicers) > 1
+    snapshots = updates.fetch_snapshots(slicers)
+    readable = [(t, c) for t, c, _ in snapshots if c is not None]
+    shared = [(t, without_description(c.configuration)) for t, c in readable]
+    if batch:
+        fresh_text = shared[0][1] if shared else ""
+    else:
+        fresh_text = normalize_configuration(readable[0][1].configuration) if readable else ""
+    base = update.config_base or fresh_text
+    return render_template(
+        "admin/slicer_updates_edit.html",
+        step=2,
+        slicers=slicers,
+        update=update,
+        batch=batch,
+        config_base=base,
+        config_text=update.configuration or base,
+        config_source=readable[0][0].slicer_id if readable else None,
+        differing=[t.slicer_id for t, text in shared if text != (shared[0][1] if shared else "")],
+        read_errors=[(t.slicer_id, e) for t, c, e in snapshots if c is None],
+        options=updates.load_edit_options(slicers),
+        error=error,
+    )
+
+
+@bp.route("/slicer-updates/edit", methods=["POST"])
+@admin_required
+def slicer_updates_edit():
+    slicers = _updatable_selection()
+    if not slicers:
+        flash("Select at least one slicer.", "error")
+        return redirect(url_for("admin.slicer_updates"))
+    return _render_edit(slicers, _posted_update(slicers))
+
+
+@bp.route("/slicer-updates/review", methods=["POST"])
+@admin_required
+def slicer_updates_review():
+    slicers = _updatable_selection()
+    if not slicers:
+        flash("Select at least one slicer.", "error")
+        return redirect(url_for("admin.slicer_updates"))
+    update = _posted_update(slicers)
+    if update.config_edited and not update.configuration:
+        # Uplynk replaces the whole configuration, so empty would wipe it.
+        return _render_edit(slicers, update, "Configuration can't be empty.")
+    plans = updates.plan_updates(slicers, update)
+    if not any(p.fields or p.error for p in plans):
+        return _render_edit(slicers, update, "Change at least one setting to continue.")
+    return render_template(
+        "admin/slicer_updates_review.html",
+        step=3,
+        slicers=slicers,
+        update=update,
+        plans=plans,
+        restarts=[p for p in plans if p.restarts],
+        sending=sum(1 for p in plans if p.fields),
+    )
+
+
+@bp.route("/slicer-updates/apply", methods=["POST"])
+@admin_required
+def slicer_updates_apply():
+    slicers = _updatable_selection()
+    if not slicers:
+        flash("Select at least one slicer.", "error")
+        return redirect(url_for("admin.slicer_updates"))
+    update = _posted_update(slicers)
+    if update.config_edited and not update.configuration:
+        return _render_edit(slicers, update, "Configuration can't be empty.")
+    confirmed = set(_posted_pks("restart_ids")) if request.form.get("confirm_restart") else set()
+    results = updates.apply_updates(current_user, slicers, update, confirmed_restarts=confirmed)
+    return render_template(
+        "admin/slicer_updates_results.html",
+        step=4,
+        update=update,
+        results=results,
+        retry_ids=[r.plan.pk for r in results if r.retryable],
+        confirmed=confirmed,
+        counts={
+            status: sum(1 for r in results if r.status == status)
+            for status in (
+                updates.STATUS_UPDATED,
+                updates.STATUS_FAILED,
+                updates.STATUS_NOT_SENT,
+                updates.STATUS_SKIPPED,
+            )
+        },
+    )
