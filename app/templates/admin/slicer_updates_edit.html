@@ -9,11 +9,13 @@
 </div>
 {{ ui.steps(step) }}
 
-<p class="muted">
-  Editing {{ slicers | length }} slicer{% if slicers | length != 1 %}s{% endif %}:
-  <span class="mono">{{ slicers | map(attribute='slicer_id') | join(', ') }}</span>.
-  Anything left blank or unchanged isn't sent.
-</p>
+<p class="muted">Anything left blank or unchanged isn't sent.</p>
+<details class="updates-selection"{% if slicers | length <= 8 %} open{% endif %}>
+  <summary>Editing {{ slicers | length }} slicer{% if slicers | length != 1 %}s{% endif %}</summary>
+  {% for account_label, group in slicers | groupby('uplynk_account.label') %}
+    <p class="muted"><strong>{{ account_label }}:</strong> <span class="mono">{{ group | map(attribute='slicer_id') | join(', ') }}</span></p>
+  {% endfor %}
+</details>
 
 {% if error %}<div class="flash flash--error" role="alert">{{ error }}</div>{% endif %}
 {% for warning in options.warnings %}<div class="flash flash--error">{{ warning }}</div>{% endfor %}

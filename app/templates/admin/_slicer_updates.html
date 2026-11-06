@@ -7,6 +7,39 @@
 </ol>
 {% endmacro %}
 
+{# Page controls and chip nav, the same as the Dashboard's. groups is a list of
+   (workspace label, its items). #}
+{% macro collapse_controls() %}
+<button type="button" class="btn-ghost" id="collapse-all-btn">Collapse all</button>
+<button type="button" class="btn-ghost" id="expand-all-btn">Expand all</button>
+{% endmacro %}
+
+{% macro workspace_nav(groups) %}
+<nav class="workspace-nav" id="workspace-nav" aria-label="Jump to workspace">
+  {% for label, items in groups %}
+    <a href="#section-{{ label }}" class="workspace-nav__chip" data-target="section-{{ label }}">
+      {{ label }}
+      <span class="workspace-nav__chip-count">({{ items | length }})</span>
+    </a>
+  {% endfor %}
+</nav>
+{% endmacro %}
+
+{% macro workspace_section(label, count) %}
+<section class="account-section" id="section-{{ label }}" data-section="{{ label }}">
+  <div class="account-section__header">
+    <h2 class="account-section__title">
+      <span class="account-section__chevron" aria-hidden="true">▶</span>
+      {{ label }}
+      <span class="account-section__count">(<span data-section-count>{{ count }}</span>)</span>
+    </h2>
+  </div>
+  <div class="account-section__body">
+    {{ caller() }}
+  </div>
+</section>
+{% endmacro %}
+
 {% macro state_badge(state) %}
 <span class="badge badge--state badge--state--{{ (state or 'unknown') | lower }}">{{ state or 'Unknown' }}</span>
 {% endmacro %}

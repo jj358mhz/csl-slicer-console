@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from itertools import groupby
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
@@ -12,7 +13,7 @@ from app.admin.decorators import admin_required
 from app.admin.forms import UplynkAccountForm, UserForm, UserSlicerAssignmentForm
 from app.auth.passwords import hash_password
 from app.crypto import decrypt, encrypt, mask
-from app.models import Slicer, UplynkAccount, User, db
+from app.models import Slicer, SlicerStar, UplynkAccount, User, db
 from app.slicers import updates
 from app.slicers.service import stored_config
 from app.uplynk.scoped_env import ScopedEnvParseError, parse_scoped_env
@@ -520,14 +521,26 @@ def _posted_pks(name: str = "slicer_ids") -> list[int]:
 @admin_required
 def slicer_updates():
     slicers = updates.list_updatable_slicers()
-    rows = [(s, stored_config(s)) for s in slicers]
+    starred = {
+        slicer_id
+        for (slicer_id,) in db.session.query(SlicerStar.slicer_id).filter_by(
+            user_id=current_user.id
+        )
+    }
+    # Grouped and ordered like the Dashboard: starred first within each workspace.
+    slicers.sort(key=lambda s: (s.uplynk_account.label, s.id not in starred, s.slicer_id))
+    groups = [
+        (label, [(s, stored_config(s)) for s in items])
+        for label, items in groupby(slicers, key=lambda s: s.uplynk_account.label)
+    ]
     problems = {
         s.uplynk_account_id: updates.account_write_problem(s.uplynk_account) for s in slicers
     }
     return render_template(
         "admin/slicer_updates_select.html",
         step=1,
-        rows=rows,
+        groups=groups,
+        starred=starred,
         problems=problems,
         account_problems=sorted({p for p in problems.values() if p}),
         selected=set(_posted_pks()),

@@ -8,7 +8,7 @@ import pytest
 import requests
 
 from app.crypto import decrypt, encrypt
-from app.models import AuditEvent, Slicer, UplynkAccount, User, db
+from app.models import AuditEvent, Slicer, SlicerStar, UplynkAccount, User, db
 from app.slicers import updates
 from app.uplynk.discovery import UplynkAPIError, UplynkDiscoveryClient
 from app.uplynk.slicer_config import (
@@ -710,3 +710,95 @@ def test_edit_warns_when_options_cannot_be_listed(app, client, uplynk, monkeypat
         as_text=True
     )
     assert "Couldn&#39;t list versions for Acct" in body
+
+
+# ---------------------------------------------------------------------------
+# Organized like the Dashboard
+# ---------------------------------------------------------------------------
+
+
+def test_select_groups_by_workspace_with_chips_and_counts(app, client):
+    first, second = _account("alpha"), _account("beta")
+    _slicer(first, "a1")
+    _slicer(first, "a2")
+    _slicer(second, "b1")
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert 'data-target="section-alpha"' in body
+    assert 'data-target="section-beta"' in body
+    assert '<span class="workspace-nav__chip-count">(2)</span>' in body
+    assert '<section class="account-section" id="section-alpha"' in body
+    assert 'class="section-selectall__cb" data-section="beta"' in body
+    assert body.index("a2") < body.index("b1")
+    assert 'id="collapse-all-btn"' in body
+    assert "js/workspace_sections.js" in body
+
+
+def test_select_has_a_floating_bar_that_starts_hidden(app, client):
+    _slicer(_account(), "a")
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert '<div id="batch-bar" class="batch-bar" hidden>' in body
+    assert 'id="updates-continue"' in body
+    assert 'id="batch-clear"' in body
+
+
+def test_select_lists_your_starred_slicers_first(app, client):
+    acct = _account()
+    _slicer(acct, "aaa")
+    starred_pk = _slicer(acct, "zzz")
+    admin = db.session.query(User).filter_by(email="test@example.com").one()
+    db.session.add(SlicerStar(user_id=admin.id, slicer_id=starred_pk))
+    db.session.commit()
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert body.index("<strong>zzz</strong>") < body.index("<strong>aaa</strong>")
+    assert 'data-search="zzz us-east-1 starred"' in body
+
+
+def test_select_disables_select_all_for_a_blocked_workspace(app, client):
+    _slicer(_account("ReadOnly", scp=READ_SCOPE), "a")
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert 'data-section="ReadOnly" disabled' in body
+
+
+def test_review_and_results_group_by_workspace(app, client, uplynk):
+    pks = [_slicer(_account("alpha"), "a1"), _slicer(_account("beta"), "b1")]
+    uplynk.settings = {"a1": _config("a1"), "b1": _config("b1")}
+    data = {
+        "slicer_ids": pks,
+        "batch": "1",
+        "slicer_version": "v2",
+        "configuration": SHARED,
+        "config_base": SHARED,
+    }
+    _login(client)
+    review = client.post("/admin/slicer-updates/review", data=data).get_data(as_text=True)
+    results = client.post("/admin/slicer-updates/apply", data=data).get_data(as_text=True)
+    for body in (review, results):
+        assert 'id="section-alpha"' in body
+        assert 'id="section-beta"' in body
+        assert 'data-target="section-beta"' in body
+        # A remembered collapse must not hide a change being reviewed or reported.
+        assert "initWorkspaceSections({persist: false})" in body
+
+
+def test_edit_summarizes_the_selection_by_workspace(app, client, uplynk):
+    pks = [_slicer(_account("alpha"), "a1"), _slicer(_account("beta"), "b1")]
+    uplynk.settings = {"a1": _config("a1"), "b1": _config("b1")}
+    _login(client)
+    body = client.post("/admin/slicer-updates/edit", data={"slicer_ids": pks}).get_data(
+        as_text=True
+    )
+    assert "Editing 2 slicers" in body
+    assert "<strong>alpha:</strong>" in body
+
+
+def test_dashboard_uses_the_shared_section_script(app, client):
+    _slicer(_account(), "a")
+    _login(client)
+    body = client.get("/").get_data(as_text=True)
+    assert "js/workspace_sections.js" in body
+    assert "window.initWorkspaceSections();" in body
+    assert client.get("/static/js/workspace_sections.js").status_code == 200

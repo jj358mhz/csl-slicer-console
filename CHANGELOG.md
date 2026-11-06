@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.20.1] - 2026-11-06
+
+### 🐛 Fixed
+- **Slicer Updates is organized like the Dashboard.** It was one flat table,
+  which didn't work with many slicers. Select now has workspace chips,
+  collapsible sections with counts, Collapse all / Expand all, Select all per
+  workspace, starred slicers first and the same filter. Once anything is
+  selected, a floating bar shows the count and the Edit button, so long lists
+  don't mean scrolling back for it. Review and Results are grouped by workspace
+  too, and always start expanded so a remembered collapse can't hide a change.
+
+### ♻️ Changed
+- The Dashboard's section and chip code moved to
+  `static/js/workspace_sections.js`, so both pages share it.
+
 ## [1.20.0] - 2026-11-06
 
 ### ✨ Added

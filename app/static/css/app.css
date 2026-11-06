@@ -25,7 +25,7 @@
    16. Slicer control actions & results
    17. Batch selection & floating action bar
    18. Modal (confirmation dialog)
-   19. Slicer Updates (admin)
+   25. Slicer Updates (admin)
    ============================================================================ */
 
 
@@ -1771,7 +1771,7 @@ form.inline {
 
 
 /* ==========================================================================
-   19. Slicer Updates (admin)
+   25. Slicer Updates (admin)
    ========================================================================== */
 
 .updates-steps {
@@ -1802,6 +1802,26 @@ form.inline {
     color: var(--text-dim);
 }
 
+.updates-row__star {
+    color: var(--pin);
+}
+
+.updates-table-box .data-table tr:has(.slicer-checkbox:checked) {
+    background: var(--accent-bg);
+}
+
+.updates-table-box .data-table tr[hidden] {
+    display: none;
+}
+
+.batch-bar .button--primary {
+    padding: 8px 16px;
+}
+
+.updates-select-form {
+    padding-bottom: 80px;
+}
+
 .updates-toggle {
     display: flex;
     align-items: center;
@@ -1822,6 +1842,20 @@ form.inline {
     font-size: 13px;
     line-height: 1.5;
     resize: vertical;
+}
+
+.updates-selection {
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+
+.updates-selection summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.updates-selection p {
+    margin: 6px 0 0;
 }
 
 .updates-warning {

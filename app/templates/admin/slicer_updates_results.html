@@ -3,9 +3,13 @@
 {% block title_suffix %} — Slicer Updates{% endblock %}
 
 {% block content %}
+{% set groups = results | groupby('plan.account_label') | list %}
 <div class="page-header">
   <h1>Slicer Updates</h1>
-  <span class="badge">Admin only</span>
+  <div class="page-header__controls">
+    {{ ui.collapse_controls() }}
+    <span class="badge">Admin only</span>
+  </div>
 </div>
 {{ ui.steps(step) }}
 
@@ -15,34 +19,39 @@
   </strong>
 </p>
 
-{% for r in results %}
-  <section class="updates-slicer">
-    <div class="updates-slicer__head">
-      <h2>{{ r.plan.slicer_id }}</h2>
-      {% if r.status == 'updated' %}
-        <span class="badge badge--active">Updated</span>
-      {% elif r.status == 'failed' %}
-        <span class="badge updates-badge--failed">Failed</span>
-      {% elif r.status == 'not_sent' %}
-        <span class="badge updates-badge--failed">Not sent</span>
-      {% else %}
-        <span class="badge">Skipped</span>
-      {% endif %}
-    </div>
-    {% if r.status == 'skipped' %}
-      <p class="muted">Already has these settings, so nothing was sent.</p>
-    {% else %}
-      <div class="updates-status">
-        <div class="updates-status__heading">{{ r.explanation.heading }}</div>
-        <p class="updates-status__meaning">{{ r.explanation.meaning }}</p>
-        <p class="updates-status__action">{{ r.explanation.action }}</p>
-        {% if r.explanation.uplynk_message %}
-          <code class="updates-status__message">Uplynk said: {{ r.explanation.uplynk_message }}</code>
+{{ ui.workspace_nav(groups) }}
+{% for label, group in groups %}
+  {% call ui.workspace_section(label, group | length) %}
+    {% for r in group %}
+      <section class="updates-slicer">
+        <div class="updates-slicer__head">
+          <h2>{{ r.plan.slicer_id }}</h2>
+          {% if r.status == 'updated' %}
+            <span class="badge badge--active">Updated</span>
+          {% elif r.status == 'failed' %}
+            <span class="badge updates-badge--failed">Failed</span>
+          {% elif r.status == 'not_sent' %}
+            <span class="badge updates-badge--failed">Not sent</span>
+          {% else %}
+            <span class="badge">Skipped</span>
+          {% endif %}
+        </div>
+        {% if r.status == 'skipped' %}
+          <p class="muted">Already has these settings, so nothing was sent.</p>
+        {% else %}
+          <div class="updates-status">
+            <div class="updates-status__heading">{{ r.explanation.heading }}</div>
+            <p class="updates-status__meaning">{{ r.explanation.meaning }}</p>
+            <p class="updates-status__action">{{ r.explanation.action }}</p>
+            {% if r.explanation.uplynk_message %}
+              <code class="updates-status__message">Uplynk said: {{ r.explanation.uplynk_message }}</code>
+            {% endif %}
+          </div>
+          {{ ui.changes(r.plan) }}
         {% endif %}
-      </div>
-      {{ ui.changes(r.plan) }}
-    {% endif %}
-  </section>
+      </section>
+    {% endfor %}
+  {% endcall %}
 {% endfor %}
 
 <p class="field__help">Each attempt is recorded in the audit log with the old and new values.</p>
@@ -60,4 +69,13 @@
   {% endif %}
   <a class="button button--link" href="{{ url_for('admin.slicer_updates') }}">Start a new update</a>
 </div>
+{% endblock %}
+
+{% block extra_head %}
+<script src="{{ url_for('static', filename='js/workspace_sections.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    window.initWorkspaceSections({persist: false});
+  });
+</script>
 {% endblock %}
