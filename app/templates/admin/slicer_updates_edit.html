@@ -45,21 +45,58 @@
     <textarea id="configuration" name="configuration" class="input updates-config" rows="16" spellcheck="false">{{ config_text }}</textarea>
     {% if batch %}
       <p class="field__help">
-        Showing {{ config_source or 'the first slicer' }}. Only your edits are applied to the other
-        selected slicers: a changed or removed line where they have it, and a new line on all of them.
-        Their other settings stay as they are, including <code>description</code>, which isn't shown or
-        changed here.
+        Shows settings with one value across the selected slicers. A changed or removed line applies to
+        the slicers that have it. A new setting goes to all of them. Everything else stays as it is on each
+        slicer, including <code>description</code>.
       </p>
-      {% if differing %}
-        <p class="field__help">
-          These slicers have settings that differ from this text, which they keep unless you edit that line:
-          <span class="mono">{{ differing | join(', ') }}</span>.
-        </p>
-      {% endif %}
     {% else %}
       <p class="field__help">If you edit this, the text replaces the slicer's whole configuration.</p>
     {% endif %}
   </div>
+
+  {% if deltas %}
+    {% set overrides = update.override_map %}
+    <fieldset class="updates-deltas">
+      <legend>Settings that differ ({{ deltas | length }})</legend>
+      <p class="field__help">Locked, so each slicer keeps its own value. Tick Override to set one value on the slicers that have it.</p>
+      {% for delta in deltas %}
+        {% set unlocked = delta.key in overrides %}
+        <div class="updates-delta{% if unlocked %} updates-delta--unlocked{% endif %}" data-delta>
+          <div class="updates-delta__head">
+            <span class="mono updates-delta__key">{{ delta.key }}</span>
+            <span class="muted">{{ delta.by_value | length }} values on {{ delta.slicer_count }} of {{ delta.total }} slicers</span>
+            <label class="updates-delta__override">
+              <input type="checkbox" name="override_on:{{ delta.key }}" value="1"{% if unlocked %} checked{% endif %}>
+              Override
+            </label>
+          </div>
+          <details class="updates-delta__values"{% if delta.by_value | length <= 3 %} open{% endif %}>
+            <summary>Current values</summary>
+            {% for value, slicer_ids in delta.by_value.items() %}
+              <div class="updates-delta__value"><span class="mono">{{ value or '(empty)' }}</span> <span class="muted">{{ slicer_ids | join(', ') }}</span></div>
+            {% endfor %}
+          </details>
+          <input class="input" type="text" name="override_value:{{ delta.key }}" autocomplete="off"
+                 aria-label="One value for {{ delta.key }}"
+                 placeholder="Locked: each slicer keeps its own"
+                 value="{{ overrides.get(delta.key, '') }}"{% if not unlocked %} disabled{% endif %}>
+        </div>
+      {% endfor %}
+    </fieldset>
+    <script>
+      document.querySelectorAll('[data-delta]').forEach(function (row) {
+        const box = row.querySelector('input[type=checkbox]');
+        const value = row.querySelector('input[type=text]');
+        box.addEventListener('change', function () {
+          value.disabled = !box.checked;
+          value.placeholder = box.checked ? 'One value for the slicers that have this' : 'Locked: each slicer keeps its own';
+          row.classList.toggle('updates-delta--unlocked', box.checked);
+          if (box.checked) value.focus();
+          else value.value = '';
+        });
+      });
+    </script>
+  {% endif %}
 
   <div class="field">
     <label for="encoding_profile_id">3. Encoding profile GUID</label>

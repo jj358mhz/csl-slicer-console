@@ -27,6 +27,8 @@ from app.uplynk.discovery import UplynkAPIError, UplynkDiscoveryClient
 from app.uplynk.slicer_config import (
     SlicerConfig,
     apply_line_edits,
+    apply_overrides,
+    line_values,
     normalize_configuration,
 )
 from app.uplynk.states import is_running_state
@@ -53,6 +55,18 @@ STATUS_NOT_SENT = "not_sent"
 OUT_OF_TIME = "Not reached in time. Nothing was sent to this slicer."
 
 
+def _posted_overrides(form) -> tuple[tuple[str, str], ...]:
+    """Ticked Override rows. `description` can't be overridden in a batch."""
+    overrides = []
+    for name in form:
+        if name.startswith("override_on:"):
+            key = name.removeprefix("override_on:")
+            if key != "description":
+                value = form.get(f"override_value:{key}", "")
+                overrides.append((key, " ".join(value.split("\n")).strip()))
+    return tuple(sorted(overrides))
+
+
 @dataclass(frozen=True)
 class UpdateRequest:
     """What the admin asked to change. Empty fields mean no change."""
@@ -64,6 +78,8 @@ class UpdateRequest:
     plugin_id: str = ""
     plugin_version: str = ""
     batch: bool = False
+    # Settings that differ between slicers, unlocked to one value: (key, value).
+    overrides: tuple[tuple[str, str], ...] = ()
 
     @classmethod
     def from_form(cls, form) -> UpdateRequest:
@@ -77,11 +93,20 @@ class UpdateRequest:
             plugin_id=plugin_id if wants_plugin else "",
             plugin_version=plugin_version if wants_plugin else "",
             batch=bool(form.get("batch")),
+            overrides=_posted_overrides(form),
         )
 
     @property
     def config_edited(self) -> bool:
         return self.configuration != self.config_base
+
+    @property
+    def override_map(self) -> dict[str, str]:
+        return dict(self.overrides)
+
+    @property
+    def blank_overrides(self) -> list[str]:
+        return [key for key, value in self.overrides if not value]
 
     @property
     def plugin_value(self) -> str:
@@ -140,6 +165,16 @@ class UpdateResult:
     @property
     def retryable(self) -> bool:
         return self.status in (STATUS_FAILED, STATUS_NOT_SENT)
+
+
+@dataclass(frozen=True)
+class SettingDelta:
+    """A setting whose value differs between the selected slicers."""
+
+    key: str
+    slicer_count: int
+    total: int
+    by_value: dict[str, list[str]]
 
 
 @dataclass(frozen=True)
@@ -331,12 +366,13 @@ def build_plan(target: _Target, state: str | None, config: SlicerConfig, update:
         plan.changes.append(
             FieldChange("plugin", before, f"{update.plugin_id} v{update.plugin_version}")
         )
-    if update.config_edited:
+    if update.config_edited or update.overrides:
         current = normalize_configuration(config.configuration)
         wanted = update.configuration
         if update.batch:
             # Only what was edited: everything else on this slicer stays its own.
             wanted = apply_line_edits(config.configuration, update.config_base, wanted)
+            wanted = apply_overrides(wanted, update.override_map)
         if wanted != current:
             plan.fields["configuration"] = f"{wanted}\n"
             plan.diff = _line_diff(current, wanted)
@@ -350,6 +386,23 @@ def _line_diff(before: str, after: str) -> list[DiffLine]:
         for line in lines
         if line[:1] in ("-", "+") and not line.startswith(("---", "+++"))
     ]
+
+
+def differing_settings(
+    configs: list[tuple[str, SlicerConfig]], keys: list[str]
+) -> list[SettingDelta]:
+    """What each slicer has for the settings that differ, for the locked rows."""
+    values = [(slicer_id, line_values(config.configuration)) for slicer_id, config in configs]
+    deltas = []
+    for key in keys:
+        by_value: dict[str, list[str]] = {}
+        for slicer_id, settings in values:
+            if key in settings:
+                by_value.setdefault(settings[key], []).append(slicer_id)
+        deltas.append(
+            SettingDelta(key, sum(len(ids) for ids in by_value.values()), len(values), by_value)
+        )
+    return deltas
 
 
 def fetch_snapshots(slicers: list[Slicer]) -> list[tuple[_Target, SlicerConfig | None, str | None]]:

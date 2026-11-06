@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.4] - 2026-11-06
+
+### 🐛 Fixed
+- **A batch's configuration box no longer shows one slicer's values as if they
+  applied to all.** It showed the first slicer's text, including settings that
+  differ such as `libraries`. It now shows only settings with one value across
+  the selected slicers.
+
+### ✨ Added
+- **Locked rows for settings that differ.** In a batch, these appear greyed out
+  with each slicer's current value, and each slicer keeps its own. Tick Override
+  to unlock one and set a single value on the slicers that have it. The change
+  shows in Review like any other.
+  Typing a locked setting into the box is refused, so it can't get around
+  Override.
+
 ## [1.21.3] - 2026-11-06
 
 ### 🐛 Fixed

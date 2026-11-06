@@ -118,8 +118,64 @@ def _line_key(line: str) -> str:
     return key.strip() if sep and key.strip() else line.strip()
 
 
+def _line_value(line: str) -> str:
+    return line.partition(":")[2].strip()
+
+
 def _lines_by_key(text: str) -> dict[str, str]:
     return {_line_key(line): line for line in text.split("\n") if line.strip()}
+
+
+def shared_lines(configurations: list[str | None]) -> tuple[str, list[str]]:
+    """What a batch's box shows: (lines with one value across slicers, keys that differ).
+
+    A setting only some slicers have still shows if they agree on it, so it can
+    be changed where it exists. A setting whose values differ is left out, since
+    no single value would be true for all of them.
+    """
+    lines: dict[str, str] = {}
+    differing: list[str] = []
+    for configuration in configurations:
+        for line in without_description(configuration).split("\n"):
+            if not line.strip():
+                continue
+            key = _line_key(line)
+            if key in differing:
+                continue
+            if key not in lines:
+                lines[key] = line
+            elif _line_value(lines[key]) != _line_value(line):
+                differing.append(key)
+                del lines[key]
+    return "\n".join(lines.values()), sorted(differing)
+
+
+def line_values(text: str | None) -> dict[str, str]:
+    """The configuration's values by key, leaving out `description`."""
+    lines = without_description(text).split("\n")
+    return {_line_key(line): _line_value(line) for line in lines if line.strip()}
+
+
+def added_keys(before: str, after: str) -> set[str]:
+    """Settings present in `after` but not `before`, leaving out `description`."""
+    return (
+        _lines_by_key(without_description(after)).keys()
+        - _lines_by_key(without_description(before)).keys()
+    )
+
+
+def apply_overrides(text: str, overrides: dict[str, str]) -> str:
+    """Set overridden settings to one value, only on a slicer that already has them."""
+    result = []
+    placed = set()
+    for line in normalize_configuration(text).split("\n"):
+        key = _line_key(line)
+        if key not in overrides or _is_description(line):
+            result.append(line)
+        elif key not in placed:
+            result.append(f"{key}:{overrides[key]}")
+            placed.add(key)
+    return "\n".join(result)
 
 
 def apply_line_edits(current: str | None, before: str, after: str) -> str:

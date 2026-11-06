@@ -58,6 +58,10 @@
   <input type="hidden" name="plugin" value="{{ update.plugin_value }}">
 {% endif %}
 {% if update.batch %}<input type="hidden" name="batch" value="1">{% endif %}
+{% for key, value in update.overrides %}
+  <input type="hidden" name="override_on:{{ key }}" value="1">
+  <input type="hidden" name="override_value:{{ key }}" value="{{ value }}">
+{% endfor %}
 {% endmacro %}
 
 {% macro changes(plan) %}
