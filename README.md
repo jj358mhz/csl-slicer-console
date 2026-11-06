@@ -112,7 +112,7 @@ cp .env.example .env
 uv run python -c "import secrets; print(secrets.token_urlsafe(32))"   # SECRET_KEY
 uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # FERNET_KEY
 
-# Start (dev overlay hot-reloads code + runs Flask in debug)
+# Start (dev overlay runs migrations, hot-reloads code + runs Flask in debug)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 # Hit the app at http://localhost:5050
