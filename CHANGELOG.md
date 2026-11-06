@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.5] - 2026-11-06
+
+### ♻️ Changed
+- **`description` is now an ordinary setting in batch edits.** It no longer needs
+  special handling: when it differs between the selected slicers it's a locked
+  row like any other, and each slicer keeps its own unless you tick Override. When
+  they all share one, it shows in the box.
+
 ## [1.21.4] - 2026-11-06
 
 ### 🐛 Fixed
