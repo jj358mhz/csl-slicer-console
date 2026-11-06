@@ -10,7 +10,7 @@
       <input type="search" id="slicer-filter" class="input slicer-filter"
              placeholder="Filter slicers…" title="Matches slicer id, description, region, protocol, or “starred”" autocomplete="off"
              aria-label="Filter slicers">
-      <button type="submit" class="btn-ghost" form="sync-all" title="Find slicers added or removed in Uplynk, for every account">Sync all</button>
+      <button type="submit" class="btn-ghost" form="sync-all" title="Find slicers added or removed in Uplynk, for every account"{% if not sync_accounts %} disabled{% endif %}>Sync all</button>
       {{ ui.collapse_controls() }}
     {% endif %}
     <span class="badge">Admin only</span>
@@ -104,17 +104,21 @@
     <button type="button" id="batch-clear" class="link-button">Clear selection</button>
   </div>
 </form>
-<form id="sync-all" class="updates-sync-form" method="post" action="{{ url_for('admin.slicer_updates_sync_all') }}"
-      onsubmit="return confirm('Sync all {{ sync_account_count }} account{{ '' if sync_account_count == 1 else 's' }}? Slicers removed from Uplynk will be marked inactive.');">
+{% set sync_count = sync_accounts | length %}
+<form id="sync-all" method="post" action="{{ url_for('admin.slicer_updates_sync_all') }}"
+      data-sync-accounts='{{ sync_accounts | tojson }}'
+      onsubmit="return confirm('Sync all {{ sync_count }} account{{ '' if sync_count == 1 else 's' }}? Slicers removed from Uplynk will be marked inactive.');">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
 {% for account_label, rows in groups %}
-  <form id="sync-{{ rows[0][0].uplynk_account_id }}" class="updates-sync-form" method="post"
-        action="{{ url_for('admin.sync_account_route', account_id=rows[0][0].uplynk_account_id) }}">
+  {% set sync_url = url_for('admin.sync_account_route', account_id=rows[0][0].uplynk_account_id) %}
+  <form id="sync-{{ rows[0][0].uplynk_account_id }}" method="post" action="{{ sync_url }}"
+        data-sync-accounts='{{ [{"label": account_label, "url": sync_url}] | tojson }}'>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="return_to" value="slicer_updates">
   </form>
 {% endfor %}
+{% include "admin/_sync_progress.html" %}
 {% else %}
   <div class="card"><p class="muted">No active slicers.</p></div>
 {% endif %}
@@ -122,6 +126,7 @@
 
 {% block extra_head %}
 <script src="{{ url_for('static', filename='js/workspace_sections.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sync_progress.js') }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     window.initWorkspaceSections();
@@ -190,17 +195,14 @@
       if (event.key === 'Enter') event.preventDefault();
     });
 
-    // A sync reloads the page, so carry the ticked slicers through it.
-    document.querySelectorAll('.updates-sync-form').forEach(form => {
-      form.addEventListener('submit', function () {
-        document.querySelectorAll('.slicer-checkbox:checked').forEach(box => {
-          const carried = document.createElement('input');
-          carried.type = 'hidden';
-          carried.name = 'slicer_ids';
-          carried.value = box.value;
-          form.appendChild(carried);
-        });
-      });
+    // Reloading after a sync keeps the ticked slicers ticked.
+    window.initSyncProgress({
+      reloadUrl() {
+        const ids = Array.from(document.querySelectorAll('.slicer-checkbox:checked'))
+          .map(box => `slicer_ids=${box.value}`)
+          .join('&');
+        return `{{ url_for('admin.slicer_updates') }}${ids ? `?${ids}` : ''}`;
+      },
     });
 
     // Coming Back from Edit or a sync: open any workspace holding a selected slicer for

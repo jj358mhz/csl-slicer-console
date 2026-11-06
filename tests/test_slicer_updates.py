@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from unittest.mock import MagicMock
 
 import pytest
 import requests
 
 from app.crypto import decrypt, encrypt
-from app.models import AuditEvent, Slicer, SlicerStar, UplynkAccount, User, db
+from app.models import AdminEvent, AuditEvent, Slicer, SlicerStar, UplynkAccount, User, db
 from app.slicers import updates
 from app.uplynk.discovery import UplynkAPIError, UplynkDiscoveryClient
 from app.uplynk.slicer_config import (
@@ -1053,3 +1054,117 @@ def test_sync_all_asks_for_confirmation_naming_the_account_count(app, client):
     body = client.get("/admin/slicer-updates").get_data(as_text=True)
     assert "return confirm(&#39;Sync all 2 accounts?" not in body
     assert "return confirm('Sync all 2 accounts? Slicers removed from Uplynk" in body
+
+
+# ---------------------------------------------------------------------------
+# Sync progress
+# ---------------------------------------------------------------------------
+
+JSON_ACCEPT = {"Accept": "application/json"}
+
+
+def test_sync_answers_json_for_the_progress_panel(app, client, monkeypatch):
+    acct = _account()
+    monkeypatch.setattr(
+        "app.uplynk.sync.sync_account",
+        lambda account: SyncResult(
+            account_id=account.id, account_label=account.label, created=2, updated=6, deactivated=1
+        ),
+    )
+    _login(client)
+    response = client.post(f"/admin/uplynk-accounts/{acct.id}/sync", headers=JSON_ACCEPT)
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "label": "Acct",
+        "created": 2,
+        "updated": 6,
+        "deactivated": 1,
+        "error": None,
+    }
+    event = db.session.query(AdminEvent).filter_by(category="sync").one()
+    assert event.action == "run"
+
+
+def test_sync_json_reports_a_failure_and_audits_it(app, client, monkeypatch):
+    acct = _account()
+    monkeypatch.setattr(
+        "app.uplynk.sync.sync_account",
+        lambda account: SyncResult(
+            account_id=account.id, account_label=account.label, error="boom"
+        ),
+    )
+    _login(client)
+    response = client.post(f"/admin/uplynk-accounts/{acct.id}/sync", headers=JSON_ACCEPT)
+    assert response.get_json()["error"] == "boom"
+    assert db.session.query(AdminEvent).filter_by(category="sync").one().action == "error"
+    # No flash waits for the next page: the panel already showed the result.
+    assert "boom" not in client.get("/admin/uplynk-accounts").get_data(as_text=True)
+
+
+def test_sync_json_requires_an_admin(app, client):
+    from app.auth.passwords import hash_password
+
+    acct = _account()
+    db.session.add(
+        User(email="user@example.com", password_hash=hash_password("user-password"), is_admin=False)
+    )
+    db.session.commit()
+    _login(client, "user@example.com", "user-password")
+    response = client.post(f"/admin/uplynk-accounts/{acct.id}/sync", headers=JSON_ACCEPT)
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize("path", ["/admin/uplynk-accounts", "/admin/slicer-updates"])
+def test_every_page_with_sync_has_the_progress_panel(app, client, path):
+    acct = _account()
+    _slicer(acct, "a")
+    _login(client)
+    body = client.get(path).get_data(as_text=True)
+    assert 'id="sync-progress"' in body
+    assert "js/sync_progress.js" in body
+    assert "window.initSyncProgress(" in body
+    assert (
+        f'data-sync-accounts=\'[{{"label": "Acct", "url": "/admin/uplynk-accounts/{acct.id}/sync"}}]\''
+        in body
+    )
+
+
+def test_sync_all_lists_only_accounts_with_a_key(app, client):
+    _slicer(_account("alpha"), "a")
+    no_key = UplynkAccount(label="NoKey", workspace_id="n", legacy_api_key_encrypted=encrypt("k"))
+    db.session.add(no_key)
+    db.session.commit()
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    all_form = body[body.index('<form id="sync-all"') :][:400]
+    assert "alpha" in all_form
+    assert "NoKey" not in all_form
+
+
+def test_sync_all_button_disabled_with_no_keys(app, client):
+    no_key = UplynkAccount(label="NoKey", workspace_id="n", legacy_api_key_encrypted=encrypt("k"))
+    db.session.add(no_key)
+    db.session.flush()
+    _slicer(no_key, "a")
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    button = body[body.index('form="sync-all"') :][:160]
+    assert "disabled" in button
+
+
+def test_sync_json_accepts_the_csrf_header_the_panel_sends(app, client, monkeypatch):
+    acct = _account()
+    _slicer(acct, "a")
+    monkeypatch.setattr(
+        "app.uplynk.sync.sync_account",
+        lambda account: SyncResult(account_id=account.id, account_label=account.label),
+    )
+    _login(client)
+    app.config["WTF_CSRF_ENABLED"] = True
+    body = client.get("/admin/uplynk-accounts").get_data(as_text=True)
+    token = re.search(r'name="csrf_token" value="([^"]+)"', body).group(1)
+    url = f"/admin/uplynk-accounts/{acct.id}/sync"
+    assert client.post(url, headers=JSON_ACCEPT).status_code == 400
+    response = client.post(url, headers={**JSON_ACCEPT, "X-CSRFToken": token})
+    assert response.status_code == 200
+    assert response.get_json()["error"] is None
