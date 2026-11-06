@@ -1304,6 +1304,17 @@ form.inline {
     margin-left: auto;
 }
 
+.account-section__actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-left: auto;
+}
+
+.account-section__actions .section-selectall {
+    margin-left: 0;
+}
+
 /* --- collapsible grid ----------------------------------------------------- */
 
 .account-section__body {
@@ -1825,13 +1836,6 @@ form.inline {
 
 .updates-select-form {
     padding-bottom: 80px;
-}
-
-.updates-section-actions {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-left: auto;
 }
 
 .updates-toggle {

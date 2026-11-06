@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from flask import current_app
+from flask import current_app, url_for
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
@@ -176,6 +176,16 @@ def account_write_problem(account: UplynkAccount) -> str | None:
             "with that scope on the Uplynk Accounts page."
         )
     return None
+
+
+def syncable_accounts() -> list[dict[str, str]]:
+    """Accounts Sync all can reach, as the progress panel wants them."""
+    accounts = db.session.scalars(select(UplynkAccount).order_by(UplynkAccount.label))
+    return [
+        {"label": a.label, "url": url_for("admin.sync_account_route", account_id=a.id)}
+        for a in accounts
+        if a.has_scoped_key
+    ]
 
 
 def list_updatable_slicers() -> list[Slicer]:

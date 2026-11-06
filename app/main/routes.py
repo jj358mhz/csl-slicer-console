@@ -10,6 +10,7 @@ from flask_login import current_user, login_required
 from app.main import bp
 from app.models import AuditEvent, Slicer, SlicerStar, UplynkAccount, db
 from app.player import channel_health
+from app.slicers.updates import syncable_accounts
 
 
 @bp.route("/")
@@ -46,6 +47,7 @@ def index() -> str:
     return render_template(
         "main/index.html",
         groups=groups,
+        sync_accounts=syncable_accounts() if current_user.is_admin else [],
         total=len(slicers),
         starred=starred,
         query=request.args.get("q", ""),

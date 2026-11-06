@@ -1,0 +1,30 @@
+{# Sync buttons and their forms, shared by every page with workspace sections.
+   The forms sit apart from the buttons, outside any other form, so Enter on a
+   checkbox can't start a sync. Pages also need admin/_sync_progress.html. #}
+{% macro sync_all_button(sync_accounts) %}
+<button type="submit" class="btn-ghost" form="sync-all" title="Find slicers added or removed in Uplynk, for every account"{% if not sync_accounts %} disabled{% endif %}>Sync all</button>
+{% endmacro %}
+
+{% macro sync_button(account) %}
+<button type="submit" class="btn-ghost account-section__action" form="sync-{{ account.id }}"
+        title="{{ 'Find slicers added or removed in Uplynk' if account.has_scoped_key else 'Upload a scoped API key to enable sync' }}"
+        {% if not account.has_scoped_key %}disabled{% endif %}>Sync</button>
+{% endmacro %}
+
+{% macro sync_all_form(sync_accounts) %}
+{% set sync_count = sync_accounts | length %}
+<form id="sync-all" method="post" action="{{ url_for('admin.slicer_updates_sync_all') }}"
+      data-sync-accounts='{{ sync_accounts | tojson }}'
+      onsubmit="return confirm('Sync all {{ sync_count }} account{{ '' if sync_count == 1 else 's' }}? Slicers removed from Uplynk will be marked inactive.');">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endmacro %}
+
+{% macro sync_form(account, return_to) %}
+{% set sync_url = url_for('admin.sync_account_route', account_id=account.id) %}
+<form id="sync-{{ account.id }}" method="post" action="{{ sync_url }}"
+      data-sync-accounts='{{ [{"label": account.label, "url": sync_url}] | tojson }}'>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="return_to" value="{{ return_to }}">
+</form>
+{% endmacro %}

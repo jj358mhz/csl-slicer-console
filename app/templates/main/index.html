@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "admin/_sync.html" as sync %}
 {% block title_suffix %} — Dashboard{% endblock %}
 
 {% block content %}
@@ -11,6 +12,9 @@
             <input type="search" id="slicer-filter" class="input slicer-filter"
                    placeholder="Filter slicers…" title="Matches slicer id, description, region, protocol, or “starred”" autocomplete="off"
                    aria-label="Filter slicers" value="{{ query }}">
+            {% endif %}
+            {% if current_user.is_admin and total %}
+                {{ sync.sync_all_button(sync_accounts) }}
             {% endif %}
             <button type="button" class="btn-ghost" id="collapse-all-btn">Collapse all</button>
             <button type="button" class="btn-ghost" id="expand-all-btn">Expand all</button>
@@ -42,10 +46,15 @@
                         {{ account_label }}
                         <span class="account-section__count">(<span data-section-count>{{ group|length }}</span>)</span>
                     </h2>
-                    <label class="section-selectall">
-                        <input type="checkbox" class="section-selectall__cb" data-section="{{ account_label }}">
-                        <span>Select all</span>
-                    </label>
+                    <div class="account-section__actions">
+                        {% if current_user.is_admin %}
+                            {{ sync.sync_button(group[0].uplynk_account) }}
+                        {% endif %}
+                        <label class="section-selectall">
+                            <input type="checkbox" class="section-selectall__cb" data-section="{{ account_label }}">
+                            <span>Select all</span>
+                        </label>
+                    </div>
                 </div>
                 <span class="account-poll"
                       hx-get="{{ url_for('slicers.account_states', account_id=group[0].uplynk_account_id) }}"
@@ -159,6 +168,14 @@
             <button type="button" id="batch-clear" class="link-button">Clear selection</button>
         </div>
 
+        {% if current_user.is_admin %}
+            {{ sync.sync_all_form(sync_accounts) }}
+            {% for account_label, group in groups %}
+                {{ sync.sync_form(group[0].uplynk_account, 'dashboard') }}
+            {% endfor %}
+            {% include "admin/_sync_progress.html" %}
+        {% endif %}
+
         {# Confirmation modal #}
         <div id="confirm-modal" class="modal" hidden>
             <div class="modal__backdrop"></div>
@@ -188,6 +205,9 @@
 
 {% block extra_head %}
     <script src="{{ url_for('static', filename='js/workspace_sections.js') }}"></script>
+    {% if current_user.is_admin %}
+        <script src="{{ url_for('static', filename='js/sync_progress.js') }}"></script>
+    {% endif %}
     <script src="https://unpkg.com/htmx.org@2.0.3"
             integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq"
             crossorigin="anonymous"></script>
@@ -298,6 +318,7 @@
                 }
 
                 window.initWorkspaceSections();
+                window.initSyncProgress?.();
 
                 clearBtn.addEventListener('click', function () {
                     document.querySelectorAll('.slicer-checkbox:checked').forEach(cb => {
