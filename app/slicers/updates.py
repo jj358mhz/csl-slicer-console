@@ -26,10 +26,8 @@ from app.models import CONFIG_SOURCE_UPDATE, AuditEvent, Slicer, UplynkAccount, 
 from app.uplynk.discovery import UplynkAPIError, UplynkDiscoveryClient
 from app.uplynk.slicer_config import (
     SlicerConfig,
-    description_line,
+    apply_line_edits,
     normalize_configuration,
-    with_description,
-    without_description,
 )
 from app.uplynk.states import is_running_state
 from app.uplynk.target_state import patch_slicer
@@ -337,11 +335,8 @@ def build_plan(target: _Target, state: str | None, config: SlicerConfig, update:
         current = normalize_configuration(config.configuration)
         wanted = update.configuration
         if update.batch:
-            # Uplynk replaces the whole configuration, so each slicer's own
-            # description line has to be sent back with the shared text.
-            wanted = with_description(
-                without_description(wanted), description_line(config.configuration)
-            )
+            # Only what was edited: everything else on this slicer stays its own.
+            wanted = apply_line_edits(config.configuration, update.config_base, wanted)
         if wanted != current:
             plan.fields["configuration"] = f"{wanted}\n"
             plan.diff = _line_diff(current, wanted)

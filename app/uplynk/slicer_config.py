@@ -106,18 +106,48 @@ def _is_description(line: str) -> bool:
     return bool(sep) and key.strip() == "description"
 
 
-def description_line(text: str | None) -> str | None:
-    """The configuration's `description` line, if it has one."""
-    lines = normalize_configuration(text).split("\n")
-    return next((line for line in lines if _is_description(line)), None)
-
-
 def without_description(text: str | None) -> str:
-    """The configuration minus its `description` line: what a pool shares (#71)."""
+    """The configuration minus its `description` line: what a batch's box shows (#71)."""
     lines = normalize_configuration(text).split("\n")
     return "\n".join(line for line in lines if not _is_description(line))
 
 
-def with_description(shared: str, description: str | None) -> str:
-    """A slicer's full configuration: its own `description` line plus the shared text."""
-    return f"{description}\n{shared}" if description else shared
+def _line_key(line: str) -> str:
+    """What identifies a line: its key, or the whole line if it has none."""
+    key, sep, _ = line.partition(":")
+    return key.strip() if sep and key.strip() else line.strip()
+
+
+def _lines_by_key(text: str) -> dict[str, str]:
+    return {_line_key(line): line for line in text.split("\n") if line.strip()}
+
+
+def apply_line_edits(current: str | None, before: str, after: str) -> str:
+    """Apply the edits between `before` and `after` to a slicer's own configuration.
+
+    Slicers in a batch legitimately differ (libraries, call_sign, pids...), and
+    Uplynk replaces the whole configuration, so only the lines the admin changed,
+    added or removed may differ from what the slicer already has. A changed line
+    only applies where the slicer has that key, so it can't switch a setting on
+    by accident. A line added as new goes to every slicer. Description lines are
+    never touched.
+    """
+    old = _lines_by_key(without_description(before))
+    new = _lines_by_key(without_description(after))
+    changed = {key: line for key, line in new.items() if old.get(key) != line}
+    removed = old.keys() - new.keys()
+
+    result = []
+    placed = set()
+    for line in normalize_configuration(current).split("\n"):
+        key = _line_key(line)
+        if key in removed:
+            continue
+        if key in changed:
+            if key not in placed:
+                result.append(changed[key])
+                placed.add(key)
+            continue
+        result.append(line)
+    result += [line for key, line in changed.items() if key not in old and key not in placed]
+    return normalize_configuration("\n".join(result))
