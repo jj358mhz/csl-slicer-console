@@ -26,6 +26,7 @@
    17. Batch selection & floating action bar
    18. Modal (confirmation dialog)
    25. Slicer Updates (admin)
+   26. Sync progress
    ============================================================================ */
 
 
@@ -1978,5 +1979,101 @@ form.inline {
 @media (max-width: 640px) {
     .updates-change {
         grid-template-columns: 1fr;
+    }
+}
+
+
+/* ==========================================================================
+   26. Sync progress
+   ========================================================================== */
+
+.sync-progress__summary {
+    margin-bottom: 8px;
+}
+
+.sync-progress .button--primary:disabled {
+    background: var(--surface-2);
+    color: var(--text-dim);
+    cursor: not-allowed;
+}
+
+.sync-progress__track {
+    height: 6px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .1);
+}
+
+.sync-progress__fill {
+    width: 0;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 200ms ease-out;
+}
+
+.sync-progress__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 50vh;
+    margin: 16px 0 20px;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.sync-progress__label {
+    margin-bottom: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.sync-progress__status {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+/* A running account has no percentage to show, so its bar only says it's busy. */
+.sync-progress__row--running .sync-progress__fill {
+    width: 35%;
+    animation: sync-progress-busy 1.1s ease-in-out infinite alternate;
+}
+
+.sync-progress__row--ok .sync-progress__fill,
+.sync-progress__row--failed .sync-progress__fill {
+    width: 100%;
+}
+
+.sync-progress__row--ok .sync-progress__fill {
+    background: var(--success);
+}
+
+.sync-progress__row--failed .sync-progress__fill {
+    background: var(--error);
+}
+
+.sync-progress__row--failed .sync-progress__status {
+    color: #f8a5a5;
+}
+
+@keyframes sync-progress-busy {
+    from {
+        transform: translateX(0);
+    }
+
+    to {
+        transform: translateX(186%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sync-progress__row--running .sync-progress__fill {
+        width: 100%;
+        opacity: .5;
+        animation: none;
     }
 }

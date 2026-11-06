@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-11-06
+
+### ✨ Added
+- **Sync progress bars** on every Sync button, on both Slicer Updates and
+  Uplynk Accounts. A panel shows an overall bar across accounts, plus a row for
+  each account that animates while it runs and ends with its result or error.
+  One account's sync is a single Uplynk call with no progress of its own, so
+  only the overall bar has a real percentage.
+
+### ♻️ Changed
+- Sync all now syncs accounts one request at a time from the browser, so it
+  isn't limited by the 30-second request timeout. Without JavaScript, the Sync
+  buttons still work as before.
+
 ## [1.20.2] - 2026-11-06
 
 ### 🐛 Fixed

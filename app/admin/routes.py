@@ -6,7 +6,7 @@ import time
 from dataclasses import replace
 from itertools import groupby
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 from sqlalchemy import select
 
@@ -155,8 +155,8 @@ def delete_account(account_id: int):
     return redirect(url_for("admin.list_accounts"))
 
 
-def _sync_and_report(acct: UplynkAccount) -> None:
-    """Sync one account, recording the outcome in the audit log and a flash."""
+def _sync_and_log(acct: UplynkAccount):
+    """Sync one account and record the outcome in the audit log."""
     from app.uplynk.sync import sync_account
 
     result = sync_account(acct)
@@ -172,7 +172,12 @@ def _sync_and_report(acct: UplynkAccount) -> None:
             f"Synced '{acct.label}': {result.created} new, {result.updated} updated, {result.deactivated} deactivated",
             target=acct.label,
         )
+    return result
 
+
+def _sync_and_report(acct: UplynkAccount) -> None:
+    """Sync one account and flash the outcome."""
+    result = _sync_and_log(acct)
     if result.error:
         flash(f"Sync failed for '{acct.label}': {result.error}", "error")
     else:
@@ -190,6 +195,17 @@ def sync_account_route(account_id: int):
     acct = db.session.get(UplynkAccount, account_id)
     if acct is None:
         abort(404)
+
+    # The progress panel (static/js/sync_progress.js) asks for JSON.
+    if request.headers.get("Accept") == "application/json":
+        result = _sync_and_log(acct)
+        return jsonify(
+            label=acct.label,
+            created=result.created,
+            updated=result.updated,
+            deactivated=result.deactivated,
+            error=result.error,
+        )
 
     _sync_and_report(acct)
 
@@ -566,9 +582,14 @@ def slicer_updates():
         account_problems=sorted({p for p in problems.values() if p}),
         selected=set(_posted_pks()),
         unread=unread,
-        sync_account_count=sum(
-            1 for a in db.session.scalars(select(UplynkAccount)) if a.has_scoped_key
-        ),
+        sync_accounts=[
+            {
+                "label": a.label,
+                "url": url_for("admin.sync_account_route", account_id=a.id),
+            }
+            for a in db.session.scalars(select(UplynkAccount).order_by(UplynkAccount.label))
+            if a.has_scoped_key
+        ],
     )
 
 
@@ -577,8 +598,10 @@ def slicer_updates():
 def slicer_updates_sync_all():
     """Sync every account with a scoped key, one at a time.
 
-    Gunicorn kills a request after 30s and one sync can take 15s, so accounts
-    not started within the budget are named for the admin to sync individually.
+    The fallback without JavaScript: the progress panel syncs accounts one
+    request at a time instead. Gunicorn kills a request after 30s and one sync
+    can take 15s, so accounts not started within the budget are named for the
+    admin to sync individually.
     """
     accounts = [
         a
