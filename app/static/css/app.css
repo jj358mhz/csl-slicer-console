@@ -370,6 +370,7 @@ code {
 
 .button--primary:hover {
     background: var(--accent-hover);
+    color: #fff;
 }
 
 .button--primary:focus {
