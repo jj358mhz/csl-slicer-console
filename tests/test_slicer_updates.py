@@ -75,7 +75,8 @@ def test_has_write_scope(scp, expected):
         (401, "HTTP 401 Unauthorized", "Acct"),
         (403, "HTTP 403 Forbidden", WRITE_SCOPE),
         (404, "HTTP 404 Not Found", "deleted or renamed"),
-        (422, "HTTP 422 Unprocessable Content", "encoding profile GUID"),
+        # The 422 phrase ends differently across Python versions.
+        (422, "HTTP 422 Unprocessable", "encoding profile GUID"),
         (429, "HTTP 429 Too Many Requests", "Wait a minute"),
         (502, "HTTP 502 Bad Gateway", "may or may not have applied"),
         (418, "HTTP 418", "refused"),
