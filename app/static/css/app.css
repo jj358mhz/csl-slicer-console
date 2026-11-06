@@ -1874,6 +1874,90 @@ form.inline {
     margin: 6px 0 0;
 }
 
+.updates-deltas {
+    margin: 0 0 20px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.updates-deltas legend {
+    padding: 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.updates-deltas > .field__help {
+    margin: 0 0 12px;
+}
+
+.updates-delta {
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+}
+
+.updates-delta__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+}
+
+.updates-delta__key {
+    color: var(--text-dim);
+}
+
+.updates-delta--unlocked .updates-delta__key {
+    color: #f1d27c;
+    font-weight: 700;
+}
+
+.updates-delta__override {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.updates-delta__override input {
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+.updates-delta__values {
+    margin: 4px 0 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.updates-delta__values summary {
+    cursor: pointer;
+}
+
+.updates-delta__value {
+    margin-top: 2px;
+    overflow-wrap: anywhere;
+}
+
+.updates-delta .input:disabled {
+    background: var(--surface-2);
+    color: var(--text-dim);
+    cursor: not-allowed;
+}
+
+.updates-delta .input:disabled::placeholder {
+    color: var(--text-dim);
+}
+
+.updates-delta--unlocked .input {
+    border-color: rgba(212, 170, 60, .7);
+}
+
 .updates-warning {
     margin-bottom: 16px;
     padding: 14px 16px;

@@ -19,7 +19,7 @@ from app.models import Slicer, SlicerStar, UplynkAccount, User, db
 from app.slicers import updates
 from app.slicers.service import stored_config
 from app.uplynk.scoped_env import ScopedEnvParseError, parse_scoped_env
-from app.uplynk.slicer_config import normalize_configuration, without_description
+from app.uplynk.slicer_config import added_keys, normalize_configuration, shared_lines
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -630,15 +630,35 @@ def _posted_update(slicers: list[Slicer]) -> updates.UpdateRequest:
     return replace(update, batch=True) if len(slicers) > 1 else update
 
 
+def _update_problem(slicers: list[Slicer], update: updates.UpdateRequest) -> str | None:
+    """Why this request can't go ahead, for the Edit page to show."""
+    if update.blank_overrides:
+        return f"Enter a value to override: {', '.join(update.blank_overrides)}."
+    if update.config_edited and not update.configuration:
+        # Uplynk replaces the whole configuration, so empty would wipe it.
+        return "Configuration can't be empty."
+    # A setting that differs is locked, so a typed line can't get around Override.
+    typed = added_keys(update.config_base, update.configuration) if update.batch else set()
+    if typed:
+        configurations = [c.configuration for _, c, _ in updates.fetch_snapshots(slicers) if c]
+        locked = sorted(typed.intersection(shared_lines(configurations)[1]))
+        if locked:
+            return (
+                f"These settings differ between the selected slicers: {', '.join(locked)}. "
+                "Remove them from the box and use Override to change them."
+            )
+    return None
+
+
 def _render_edit(slicers: list[Slicer], update: updates.UpdateRequest, error: str | None = None):
     batch = update.batch or len(slicers) > 1
     snapshots = updates.fetch_snapshots(slicers)
-    readable = [(t, c) for t, c, _ in snapshots if c is not None]
-    shared = [(t, without_description(c.configuration)) for t, c in readable]
+    configurations = [c.configuration for _, c, _ in snapshots if c is not None]
+    differing: list[str] = []
     if batch:
-        fresh_text = shared[0][1] if shared else ""
+        fresh_text, differing = shared_lines(configurations)
     else:
-        fresh_text = normalize_configuration(readable[0][1].configuration) if readable else ""
+        fresh_text = normalize_configuration(configurations[0]) if configurations else ""
     base = update.config_base or fresh_text
     return render_template(
         "admin/slicer_updates_edit.html",
@@ -648,8 +668,9 @@ def _render_edit(slicers: list[Slicer], update: updates.UpdateRequest, error: st
         batch=batch,
         config_base=base,
         config_text=update.configuration or base,
-        config_source=readable[0][0].slicer_id if readable else None,
-        differing=[t.slicer_id for t, text in shared if text != (shared[0][1] if shared else "")],
+        deltas=updates.differing_settings(
+            [(t.slicer_id, c) for t, c, _ in snapshots if c is not None], differing
+        ),
         read_errors=[(t.slicer_id, e) for t, c, e in snapshots if c is None],
         options=updates.load_edit_options(slicers),
         error=error,
@@ -674,9 +695,9 @@ def slicer_updates_review():
         flash("Select at least one slicer.", "error")
         return redirect(url_for("admin.slicer_updates"))
     update = _posted_update(slicers)
-    if update.config_edited and not update.configuration:
-        # Uplynk replaces the whole configuration, so empty would wipe it.
-        return _render_edit(slicers, update, "Configuration can't be empty.")
+    problem = _update_problem(slicers, update)
+    if problem:
+        return _render_edit(slicers, update, problem)
     plans = updates.plan_updates(slicers, update)
     if not any(p.fields or p.error for p in plans):
         return _render_edit(slicers, update, "Change at least one setting to continue.")
@@ -699,8 +720,9 @@ def slicer_updates_apply():
         flash("Select at least one slicer.", "error")
         return redirect(url_for("admin.slicer_updates"))
     update = _posted_update(slicers)
-    if update.config_edited and not update.configuration:
-        return _render_edit(slicers, update, "Configuration can't be empty.")
+    problem = _update_problem(slicers, update)
+    if problem:
+        return _render_edit(slicers, update, problem)
     confirmed = set(_posted_pks("restart_ids")) if request.form.get("confirm_restart") else set()
     results = updates.apply_updates(current_user, slicers, update, confirmed_restarts=confirmed)
     return render_template(

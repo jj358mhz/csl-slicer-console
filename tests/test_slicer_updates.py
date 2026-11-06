@@ -15,7 +15,10 @@ from app.uplynk.discovery import UplynkAPIError, UplynkDiscoveryClient
 from app.uplynk.slicer_config import (
     SlicerConfig,
     apply_line_edits,
+    apply_overrides,
+    line_values,
     normalize_configuration,
+    shared_lines,
     without_description,
 )
 from app.uplynk.sync import SyncResult
@@ -504,9 +507,15 @@ def test_edit_fetches_current_settings_and_shows_differences(app, client, uplynk
     body = client.post("/admin/slicer-updates/edit", data={"slicer_ids": pks}).get_data(
         as_text=True
     )
-    assert "gain:0.0" in body
-    assert "description:a" not in body
-    assert "which they keep unless you edit that line" in body
+    box = body[body.index('name="configuration"') : body.index("</textarea>")]
+    assert "drm_mode:studio" in box
+    assert "gain:" not in box
+    assert "description:" not in box
+    assert "Settings that differ (1)" in body
+    assert 'name="override_on:gain"' in body
+    assert "2 values on 2 of 2 slicers" in body
+    # Locked until Override is ticked.
+    assert "disabled" in body[body.index('name="override_value:gain"') :][:320]
     assert 'name="batch" value="1"' in body
     assert "scte-wma v1.2.0" in body
     assert ">v2</option>" in body
@@ -1314,3 +1323,263 @@ def test_batch_new_line_reaches_every_slicer():
     )
     plan = updates.build_plan(_target(), "Stopped", _config("x", shared="mine:y"), update)
     assert plan.fields["configuration"] == "description:x\nmine:y\nnew:1\n"
+
+
+def test_shared_lines_leaves_out_values_that_differ():
+    east = "description:east\ngain:0.0\nlibraries:aaa\n"
+    west = "description:west\ngain:0.0\nlibraries:bbb\n"
+    assert shared_lines([east, west]) == ("gain:0.0", ["libraries"])
+
+
+def test_shared_lines_keeps_a_setting_only_some_slicers_have():
+    assert shared_lines(["a:1\nonly_some:5", "a:1", "a:1\nonly_some:5"]) == (
+        "a:1\nonly_some:5",
+        [],
+    )
+
+
+def test_shared_lines_ignores_spacing_around_values():
+    assert shared_lines(["gain: 1", "gain:1"]) == ("gain: 1", [])
+
+
+def test_shared_lines_reports_a_key_once_however_many_values_it_has():
+    assert shared_lines(["a:1", "a:2", "a:3", "a:1"]) == ("", ["a"])
+
+
+def test_shared_lines_with_nothing_shared_or_nothing_at_all():
+    assert shared_lines(["a:1", "a:2"]) == ("", ["a"])
+    assert shared_lines([None, ""]) == ("", [])
+
+
+def test_batch_box_flow_keeps_libraries_and_can_set_them_on_purpose():
+    """From the box's own text: an edit keeps libraries; adding the key sets it everywhere."""
+    west = _config("west", shared="cc1_desc:EnglishO\nlibraries:bbb")
+    east = _config("east", shared="cc1_desc:EnglishO\nlibraries:aaa")
+    base, differing = shared_lines([east.configuration, west.configuration])
+    assert base == "cc1_desc:EnglishO"
+    assert differing == ["libraries"]
+
+    edited = updates.UpdateRequest(configuration="cc1_desc:English", config_base=base, batch=True)
+    plan = updates.build_plan(_target(), "Stopped", west, edited)
+    assert plan.fields["configuration"] == "description:west\ncc1_desc:English\nlibraries:bbb\n"
+
+    added = updates.UpdateRequest(
+        configuration=f"{base}\nlibraries:ccc", config_base=base, batch=True
+    )
+    plan = updates.build_plan(_target(), "Stopped", west, added)
+    assert plan.fields["configuration"] == "description:west\ncc1_desc:EnglishO\nlibraries:ccc\n"
+    assert [d.text for d in plan.diff] == ["libraries:bbb", "libraries:ccc"]
+
+
+# ---------------------------------------------------------------------------
+# Locked rows and Override
+# ---------------------------------------------------------------------------
+
+
+def test_apply_overrides_only_where_the_setting_exists():
+    assert apply_overrides("a:1\nlibraries:bbb", {"libraries": "ccc"}) == "a:1\nlibraries:ccc"
+    assert apply_overrides("a:1", {"libraries": "ccc"}) == "a:1"
+    assert apply_overrides("a:1\nb:2\na:3", {"a": "9"}) == "a:9\nb:2"
+    assert apply_overrides("description:x\na:1", {"description": "y"}) == "description:x\na:1"
+
+
+def test_line_values_leaves_out_description():
+    assert line_values("description:x\ngain: 1\nurl:http://a:1\n") == {
+        "gain": "1",
+        "url": "http://a:1",
+    }
+
+
+def test_override_sets_one_value_and_keeps_the_rest():
+    west = _config("west", shared="cc1_desc:English\nlibraries:bbb")
+    update = updates.UpdateRequest(
+        configuration="cc1_desc:English",
+        config_base="cc1_desc:English",
+        batch=True,
+        overrides=(("libraries", "ccc"),),
+    )
+    plan = updates.build_plan(_target(), "Stopped", west, update)
+    assert plan.fields["configuration"] == "description:west\ncc1_desc:English\nlibraries:ccc\n"
+    assert [d.text for d in plan.diff] == ["libraries:bbb", "libraries:ccc"]
+
+
+def test_override_skips_a_slicer_without_that_setting():
+    update = updates.UpdateRequest(
+        configuration="gain:0.0",
+        config_base="gain:0.0",
+        batch=True,
+        overrides=(("libraries", "ccc"),),
+    )
+    plan = updates.build_plan(_target(), "Slicing", _config(shared="gain:0.0"), update)
+    assert plan.skipped
+    assert not plan.restarts
+
+
+def test_form_reads_only_ticked_overrides():
+    form = {
+        "override_on:libraries": "1",
+        "override_value:libraries": " ccc \r\n",
+        "override_value:pids": "1,2",
+        "override_on:description": "1",
+        "override_value:description": "all",
+    }
+    assert updates.UpdateRequest.from_form(form).overrides == (("libraries", "ccc"),)
+
+
+def test_review_shows_an_override_and_carries_it_to_apply(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {
+        "a": _config("a", shared="gain:0.0\nlibraries:aaa"),
+        "b": _config("b", shared="gain:0.0\nlibraries:bbb"),
+    }
+    data = {
+        "slicer_ids": pks,
+        "batch": "1",
+        "configuration": "gain:0.0",
+        "config_base": "gain:0.0",
+        "override_on:libraries": "1",
+        "override_value:libraries": "ccc",
+    }
+    _login(client)
+    review = client.post("/admin/slicer-updates/review", data=data).get_data(as_text=True)
+    assert "libraries:aaa" in review
+    assert "libraries:ccc" in review
+    assert 'name="override_on:libraries"' in review
+    assert 'name="override_value:libraries" value="ccc"' in review
+
+    client.post("/admin/slicer-updates/apply", data=data)
+    sent = dict(uplynk.patches)
+    assert sent["a"]["configuration"] == "description:a\ngain:0.0\nlibraries:ccc\n"
+    assert sent["b"]["configuration"] == "description:b\ngain:0.0\nlibraries:ccc\n"
+
+
+def test_no_override_means_each_slicer_keeps_its_value(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {
+        "a": _config("a", shared="gain:0.0\nlibraries:aaa"),
+        "b": _config("b", shared="gain:0.0\nlibraries:bbb"),
+    }
+    _login(client)
+    _apply(client, pks, configuration="gain:1.0", config_base="gain:0.0")
+    sent = dict(uplynk.patches)
+    assert "libraries:aaa" in sent["a"]["configuration"]
+    assert "libraries:bbb" in sent["b"]["configuration"]
+
+
+@pytest.mark.parametrize("step", ["review", "apply"])
+def test_a_ticked_override_needs_a_value(app, client, uplynk, step):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {
+        "a": _config("a", shared="gain:0.0\nlibraries:aaa"),
+        "b": _config("b", shared="gain:0.0\nlibraries:bbb"),
+    }
+    _login(client)
+    body = client.post(
+        f"/admin/slicer-updates/{step}",
+        data={
+            "slicer_ids": pks,
+            "batch": "1",
+            "configuration": "gain:0.0",
+            "config_base": "gain:0.0",
+            "override_on:libraries": "1",
+            "override_value:libraries": "  ",
+        },
+    ).get_data(as_text=True)
+    assert "Enter a value to override: libraries." in body
+    assert uplynk.patches == []
+
+
+def test_back_to_edit_keeps_an_override_unlocked(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {
+        "a": _config("a", shared="gain:0.0\nlibraries:aaa"),
+        "b": _config("b", shared="gain:0.0\nlibraries:bbb"),
+    }
+    _login(client)
+    body = client.post(
+        "/admin/slicer-updates/edit",
+        data={
+            "slicer_ids": pks,
+            "batch": "1",
+            "configuration": "gain:0.0",
+            "config_base": "gain:0.0",
+            "override_on:libraries": "1",
+            "override_value:libraries": "ccc",
+        },
+    ).get_data(as_text=True)
+    assert 'name="override_on:libraries" value="1" checked' in body
+    row = body[body.index('name="override_value:libraries"') :][:320]
+    assert 'value="ccc"' in row
+    assert "disabled" not in row
+
+
+def test_single_slicer_edit_has_no_locked_rows(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    _login(client)
+    body = client.post("/admin/slicer-updates/edit", data={"slicer_ids": [pk]}).get_data(
+        as_text=True
+    )
+    assert "Settings that differ" not in body
+
+
+@pytest.mark.parametrize("step", ["review", "apply"])
+def test_typing_a_locked_setting_into_the_box_is_refused(app, client, uplynk, step):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {
+        "a": _config("a", shared="gain:0.0\nlibraries:aaa"),
+        "b": _config("b", shared="gain:0.0\nlibraries:bbb"),
+    }
+    _login(client)
+    body = client.post(
+        f"/admin/slicer-updates/{step}",
+        data={
+            "slicer_ids": pks,
+            "batch": "1",
+            "configuration": "gain:0.0\nlibraries:ccc",
+            "config_base": "gain:0.0",
+        },
+    ).get_data(as_text=True)
+    assert "These settings differ between the selected slicers: libraries." in body
+    assert "use Override" in body
+    assert uplynk.patches == []
+
+
+def test_a_genuinely_new_setting_is_still_allowed(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {
+        "a": _config("a", shared="gain:0.0\nlibraries:aaa"),
+        "b": _config("b", shared="gain:0.0\nlibraries:bbb"),
+    }
+    _login(client)
+    _apply(client, pks, configuration="gain:0.0\nnew_key:1", config_base="gain:0.0")
+    sent = dict(uplynk.patches)
+    assert sent["a"]["configuration"] == "description:a\ngain:0.0\nlibraries:aaa\nnew_key:1\n"
+    assert sent["b"]["configuration"] == "description:b\ngain:0.0\nlibraries:bbb\nnew_key:1\n"
+
+
+def test_a_setting_only_some_slicers_share_can_be_changed_in_the_box(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {
+        "a": _config("a", shared="gain:0.0\nsome:1"),
+        "b": _config("b", shared="gain:0.0"),
+    }
+    _login(client)
+    _apply(client, pks, configuration="gain:0.0\nsome:2", config_base="gain:0.0\nsome:1")
+    assert dict(uplynk.patches) == {"a": {"configuration": "description:a\ngain:0.0\nsome:2\n"}}
+
+
+def test_single_slicer_edit_can_add_any_line(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a", shared="gain:0.0")}
+    text = "description:a\ngain:0.0"
+    _login(client)
+    _apply(client, [pk], configuration=f"{text}\nlibraries:ccc", config_base=text)
+    assert "libraries:ccc" in uplynk.patches[0][1]["configuration"]
