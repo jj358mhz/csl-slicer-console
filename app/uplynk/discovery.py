@@ -180,6 +180,14 @@ class UplynkDiscoveryClient:
         payload = self._retrieve(slicer_id)
         return (payload.get("status") or {}).get("state"), SlicerConfig.from_api(payload)
 
+    def list_slicer_snapshots(self) -> dict[str, tuple[str | None, SlicerConfig]]:
+        """Every slicer's current state and configuration, by slicer id, in one call."""
+        return {
+            item["id"]: ((item.get("status") or {}).get("state"), SlicerConfig.from_api(item))
+            for item in self._list_items(self.LIST_ENDPOINT)
+            if item.get("id")
+        }
+
     def list_versions(self, region: str | None = None) -> list[str]:
         """Slicer versions available in a region, newest first.
 

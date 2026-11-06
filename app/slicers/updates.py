@@ -240,6 +240,68 @@ def _run_all(items: list, work: Callable, out_of_time: Callable) -> list:
         return list(pool.map(run, items))
 
 
+def fetch_current_listing(
+    slicers: list[Slicer],
+) -> tuple[dict[int, tuple[str | None, SlicerConfig]], list[str]]:
+    """Each slicer's live state and settings by pk, with one list call per account.
+
+    Stored copies only exist for slicers captured while running, and states go
+    stale between polls. Also returns which accounts couldn't be read. Accounts
+    with a read-only key can still be listed; only updates need write.
+    """
+    api_base = current_app.config["UPLYNK_API_BASE"]
+    accounts = {s.uplynk_account_id: s.uplynk_account for s in slicers}
+    warnings = []
+    clients = []
+    for account in accounts.values():
+        if not account.has_scoped_key:
+            warnings.append(account.label)
+            continue
+        try:
+            private_b64 = decrypt(account.scoped_private_b64_encrypted)
+        except CryptoError:
+            warnings.append(account.label)
+            continue
+        clients.append(
+            (
+                account,
+                UplynkDiscoveryClient(
+                    api_base=api_base,
+                    kid=account.scoped_kid,
+                    sub=account.scoped_sub,
+                    private_b64=private_b64,
+                    scp=account.scoped_scp,
+                    timeout=FETCH_TIMEOUT_SECONDS,
+                ),
+            )
+        )
+    labels = {account.id: account.label for account, _ in clients}
+    logger = current_app.logger  # Worker threads have no app context.
+
+    def fetch(entry):
+        account_id, client = entry
+        try:
+            return account_id, client.list_slicer_snapshots()
+        except UplynkAPIError as e:
+            logger.warning("Listing %s failed: %s", labels[account_id], e)
+            return account_id, None
+
+    results = _run_all(
+        [(account.id, client) for account, client in clients],
+        fetch,
+        lambda entry: (entry[0], None),
+    )
+    by_account = dict(results)
+    warnings += [labels[account_id] for account_id, snapshots in results if snapshots is None]
+
+    current = {}
+    for slicer in slicers:
+        snapshot = (by_account.get(slicer.uplynk_account_id) or {}).get(slicer.slicer_id)
+        if snapshot:
+            current[slicer.id] = snapshot
+    return current, sorted(warnings)
+
+
 def build_plan(target: _Target, state: str | None, config: SlicerConfig, update: UpdateRequest):
     """Compare the request with a slicer's current settings."""
     plan = SlicerPlan(target.pk, target.slicer_id, target.account_label, state=state)

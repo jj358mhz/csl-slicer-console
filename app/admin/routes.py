@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import replace
 from itertools import groupby
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
+from sqlalchemy import select
 
 from app.admin.audit import log_admin_event
 from app.admin.decorators import admin_required
@@ -20,6 +22,8 @@ from app.uplynk.scoped_env import ScopedEnvParseError, parse_scoped_env
 from app.uplynk.slicer_config import normalize_configuration, without_description
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+SYNC_ALL_BUDGET_SECONDS = 12
 
 
 def _apply_scoped_env(acct: UplynkAccount, file_storage) -> str | None:
@@ -151,14 +155,9 @@ def delete_account(account_id: int):
     return redirect(url_for("admin.list_accounts"))
 
 
-@bp.route("/uplynk-accounts/<int:account_id>/sync", methods=["POST"])
-@admin_required
-def sync_account_route(account_id: int):
+def _sync_and_report(acct: UplynkAccount) -> None:
+    """Sync one account, recording the outcome in the audit log and a flash."""
     from app.uplynk.sync import sync_account
-
-    acct = db.session.get(UplynkAccount, account_id)
-    if acct is None:
-        abort(404)
 
     result = sync_account(acct)
 
@@ -183,6 +182,19 @@ def sync_account_route(account_id: int):
             f"{result.deactivated} deactivated.",
             "success",
         )
+
+
+@bp.route("/uplynk-accounts/<int:account_id>/sync", methods=["POST"])
+@admin_required
+def sync_account_route(account_id: int):
+    acct = db.session.get(UplynkAccount, account_id)
+    if acct is None:
+        abort(404)
+
+    _sync_and_report(acct)
+
+    if request.form.get("return_to") == "slicer_updates":
+        return redirect(url_for("admin.slicer_updates", slicer_ids=_posted_pks()))
     return redirect(url_for("admin.list_accounts"))
 
 
@@ -529,8 +541,17 @@ def slicer_updates():
     }
     # Grouped and ordered like the Dashboard: starred first within each workspace.
     slicers.sort(key=lambda s: (s.uplynk_account.label, s.id not in starred, s.slicer_id))
+    current, unread = updates.fetch_current_listing(slicers)
+
+    def row(slicer: Slicer) -> tuple:
+        # Uplynk's live values, or the last captured copy if it couldn't say.
+        if slicer.id in current:
+            state, config = current[slicer.id]
+            return slicer, config, state
+        return slicer, stored_config(slicer), slicer.last_state
+
     groups = [
-        (label, [(s, stored_config(s)) for s in items])
+        (label, [row(s) for s in items])
         for label, items in groupby(slicers, key=lambda s: s.uplynk_account.label)
     ]
     problems = {
@@ -544,7 +565,36 @@ def slicer_updates():
         problems=problems,
         account_problems=sorted({p for p in problems.values() if p}),
         selected=set(_posted_pks()),
+        unread=unread,
+        sync_account_count=sum(
+            1 for a in db.session.scalars(select(UplynkAccount)) if a.has_scoped_key
+        ),
     )
+
+
+@bp.route("/slicer-updates/sync-all", methods=["POST"])
+@admin_required
+def slicer_updates_sync_all():
+    """Sync every account with a scoped key, one at a time.
+
+    Gunicorn kills a request after 30s and one sync can take 15s, so accounts
+    not started within the budget are named for the admin to sync individually.
+    """
+    accounts = [
+        a
+        for a in db.session.scalars(select(UplynkAccount).order_by(UplynkAccount.label))
+        if a.has_scoped_key
+    ]
+    deadline = time.monotonic() + SYNC_ALL_BUDGET_SECONDS
+    not_reached = []
+    for acct in accounts:
+        if time.monotonic() > deadline:
+            not_reached.append(acct.label)
+        else:
+            _sync_and_report(acct)
+    if not_reached:
+        flash(f"Ran out of time before syncing: {', '.join(not_reached)}.", "error")
+    return redirect(url_for("admin.slicer_updates", slicer_ids=_posted_pks()))
 
 
 def _updatable_selection() -> list[Slicer]:
