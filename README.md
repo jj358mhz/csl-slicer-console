@@ -46,8 +46,8 @@ control buttons, and full audit trails.
 - 🛠️ **Slicer Updates** — an admin-only tab that changes slicer version,
   configuration, encoding profile and optionally plugin, on one slicer or a
   batch. Reads current settings from Uplynk, shows a diff to review, asks
-  before restarting running slicers, keeps each slicer's `description` line in
-  a batch, and explains each result's HTTP status with a retry. Needs a key
+  before restarting running slicers, applies only the lines you edit in a batch
+  so each slicer keeps its own settings, and explains each result's HTTP status with a retry. Needs a key
   with `video.services.ingest.slicer.cloudslicer.live:write`; accounts without
   it get a warning.
 - ✅ **Batch operations** — checkbox per card, section select-all, floating

@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.3] - 2026-11-06
+
+### 🐛 Fixed
+- **Batch configuration updates no longer overwrite settings you didn't edit.**
+  A batch sent one configuration to every slicer and only protected the
+  `description` line, so per-slicer settings such as `libraries` were replaced
+  with the first slicer's. A batch now applies only your edits, and each slicer
+  keeps everything else: a changed or removed line applies where the slicer has
+  it, so an edit can't switch a setting on by accident, and a line added as new
+  goes to every slicer. Editing a single slicer still sends the full text.
+
 ## [1.21.2] - 2026-11-06
 
 ### 🐛 Fixed

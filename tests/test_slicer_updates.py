@@ -14,9 +14,8 @@ from app.slicers import updates
 from app.uplynk.discovery import UplynkAPIError, UplynkDiscoveryClient
 from app.uplynk.slicer_config import (
     SlicerConfig,
-    description_line,
+    apply_line_edits,
     normalize_configuration,
-    with_description,
     without_description,
 )
 from app.uplynk.sync import SyncResult
@@ -139,13 +138,9 @@ def test_normalize_configuration_handles_browser_line_endings():
     assert normalize_configuration(None) == ""
 
 
-def test_description_helpers():
+def test_without_description():
     text = "description: My Slicer\npids:1,2\ndescriptive:no\n"
-    assert description_line(text) == "description: My Slicer"
     assert without_description(text) == "pids:1,2\ndescriptive:no"
-    assert description_line("pids:1") is None
-    assert with_description("pids:1", "description:x") == "description:x\npids:1"
-    assert with_description("pids:1", None) == "pids:1"
 
 
 # ---------------------------------------------------------------------------
@@ -195,12 +190,70 @@ def test_batch_config_ignores_a_description_typed_into_the_box():
     assert plan.fields["configuration"] == f"description:own-name\n{SHARED}\nnew:1\n"
 
 
-def test_batch_config_shows_other_settings_it_would_overwrite():
+def test_batch_config_keeps_settings_that_differ_between_slicers():
     different = SHARED.replace("pids:100,101", "pids:200,201")
     edited = SHARED.replace("gain:0.0", "gain:1.0")
     update = updates.UpdateRequest(configuration=edited, config_base=SHARED, batch=True)
     plan = updates.build_plan(_target(), "Stopped", _config(shared=different), update)
-    assert {d.text for d in plan.diff} >= {"pids:200,201", "pids:100,101"}
+    assert "pids:200,201" in plan.fields["configuration"]
+    assert "pids:100,101" not in plan.fields["configuration"]
+    assert [d.text for d in plan.diff] == ["gain:0.0", "gain:1.0"]
+
+
+def test_batch_config_keeps_each_slicers_libraries():
+    """The reported case: west's libraries were replaced with east's."""
+    east = "cc1_desc:English\nlibraries:99c755439a5e41c6bc07008d63909c66"
+    west = "cc1_desc:English\nlibraries:b411b1aa07354101a41c7823376ebc83"
+    edited = east.replace("cc1_desc:English", "cc1_desc:EnglishO")
+    update = updates.UpdateRequest(configuration=edited, config_base=east, batch=True)
+    plan = updates.build_plan(_target(), "Stopped", _config("west", shared=west), update)
+    assert plan.fields["configuration"] == (
+        "description:west\ncc1_desc:EnglishO\nlibraries:b411b1aa07354101a41c7823376ebc83\n"
+    )
+    assert [d.text for d in plan.diff] == ["cc1_desc:English", "cc1_desc:EnglishO"]
+
+
+def test_batch_config_leaves_a_slicer_alone_if_the_edit_is_already_there():
+    edited = SHARED.replace("gain:0.0", "gain:1.0")
+    update = updates.UpdateRequest(configuration=edited, config_base=SHARED, batch=True)
+    plan = updates.build_plan(_target(), "Slicing", _config(shared=edited), update)
+    assert plan.skipped
+    assert not plan.restarts
+
+
+@pytest.mark.parametrize(
+    ("current", "before", "after", "expected"),
+    [
+        # Changes a line in place, keeping the slicer's order and other lines.
+        ("a:1\nmine:x\nb:2", "a:1\nb:2", "a:9\nb:2", "a:9\nmine:x\nb:2"),
+        # Adds a new line at the end.
+        ("a:1\nmine:x", "a:1", "a:1\nnew:1", "a:1\nmine:x\nnew:1"),
+        # A changed line doesn't appear on a slicer that lacks it.
+        ("mine:x", "a:1", "a:9", "mine:x"),
+        # A new line replaces the slicer's own if it already has that key.
+        ("new:0\nmine:x", "a:1", "a:1\nnew:1", "new:1\nmine:x"),
+        # Removes a line, from slicers that have it, even with a different value.
+        ("a:7\nmine:x", "a:1\nb:2", "b:2", "mine:x"),
+        # Nothing edited, nothing changes, even if the slicer differs.
+        ("a:7\nmine:x", "a:1", "a:1", "a:7\nmine:x"),
+        # Values containing colons stay whole.
+        (
+            "url:http://old:1\nmine:x",
+            "url:http://old:1",
+            "url:http://new:2",
+            "url:http://new:2\nmine:x",
+        ),
+        # Lines with no key are matched whole.
+        ("oddline\nmine:x", "oddline", "", "mine:x"),
+        # A repeated key ends up once, where it first appeared.
+        ("a:1\nmine:x\na:2", "a:1", "a:9", "a:9\nmine:x"),
+        # Description lines are never touched, even if typed into the box.
+        ("description:mine\na:1", "a:1", "description:all\na:1", "description:mine\na:1"),
+        ("description:mine\na:1", "description:mine\na:1", "a:1", "description:mine\na:1"),
+    ],
+)
+def test_apply_line_edits(current, before, after, expected):
+    assert apply_line_edits(current, before, after) == expected
 
 
 def test_single_slicer_config_can_change_its_description():
@@ -453,7 +506,7 @@ def test_edit_fetches_current_settings_and_shows_differences(app, client, uplynk
     )
     assert "gain:0.0" in body
     assert "description:a" not in body
-    assert "These slicers currently differ" in body
+    assert "which they keep unless you edit that line" in body
     assert 'name="batch" value="1"' in body
     assert "scte-wma v1.2.0" in body
     assert ">v2</option>" in body
@@ -1243,3 +1296,21 @@ def test_sync_ignores_an_unknown_return_to(app, client, monkeypatch):
         f"/admin/uplynk-accounts/{acct.id}/sync", data={"return_to": "https://evil.example"}
     )
     assert response.headers["Location"].endswith("/admin/uplynk-accounts")
+
+
+def test_batch_edit_skips_a_slicer_without_that_line_so_it_does_not_restart():
+    edited = "pts_offset_16:9\ngain:0.0"
+    update = updates.UpdateRequest(
+        configuration=edited, config_base="pts_offset_16:1\ngain:0.0", batch=True
+    )
+    plan = updates.build_plan(_target(), "Slicing", _config(shared="gain:0.0"), update)
+    assert plan.skipped
+    assert not plan.restarts
+
+
+def test_batch_new_line_reaches_every_slicer():
+    update = updates.UpdateRequest(
+        configuration="gain:0.0\nnew:1", config_base="gain:0.0", batch=True
+    )
+    plan = updates.build_plan(_target(), "Stopped", _config("x", shared="mine:y"), update)
+    assert plan.fields["configuration"] == "description:x\nmine:y\nnew:1\n"

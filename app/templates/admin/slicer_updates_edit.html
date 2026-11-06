@@ -45,13 +45,15 @@
     <textarea id="configuration" name="configuration" class="input updates-config" rows="16" spellcheck="false">{{ config_text }}</textarea>
     {% if batch %}
       <p class="field__help">
-        Starting from {{ config_source or 'the first slicer' }}. If you edit this, the text replaces the
-        configuration on every selected slicer, and each keeps its own <code>description</code> line.
+        Showing {{ config_source or 'the first slicer' }}. Only your edits are applied to the other
+        selected slicers: a changed or removed line where they have it, and a new line on all of them.
+        Their other settings stay as they are, including <code>description</code>, which isn't shown or
+        changed here.
       </p>
       {% if differing %}
         <p class="field__help">
-          These slicers currently differ from this text: <span class="mono">{{ differing | join(', ') }}</span>.
-          Review shows exactly what would change.
+          These slicers have settings that differ from this text, which they keep unless you edit that line:
+          <span class="mono">{{ differing | join(', ') }}</span>.
         </p>
       {% endif %}
     {% else %}
