@@ -3,9 +3,13 @@
 {% block title_suffix %} — Slicer Updates{% endblock %}
 
 {% block content %}
+{% set groups = plans | groupby('account_label') | list %}
 <div class="page-header">
   <h1>Slicer Updates</h1>
-  <span class="badge">Admin only</span>
+  <div class="page-header__controls">
+    {{ ui.collapse_controls() }}
+    <span class="badge">Admin only</span>
+  </div>
 </div>
 {{ ui.steps(step) }}
 
@@ -27,18 +31,23 @@
     </div>
   {% endif %}
 
-  {% for plan in plans %}
-    <section class="updates-slicer">
-      <div class="updates-slicer__head">
-        <h2>{{ plan.slicer_id }}</h2>
-        {% if not plan.error %}{{ ui.state_badge(plan.state) }}{% endif %}
-        {% if plan.skipped %}<span class="muted">No changes, so nothing is sent</span>{% endif %}
-      </div>
-      {% if plan.error %}
-        <div class="flash flash--error">Couldn't read this slicer's current settings, so it won't be updated: {{ plan.error }}</div>
-      {% endif %}
-      {{ ui.changes(plan) }}
-    </section>
+  {{ ui.workspace_nav(groups) }}
+  {% for label, group in groups %}
+    {% call ui.workspace_section(label, group | length) %}
+      {% for plan in group %}
+        <section class="updates-slicer">
+          <div class="updates-slicer__head">
+            <h2>{{ plan.slicer_id }}</h2>
+            {% if not plan.error %}{{ ui.state_badge(plan.state) }}{% endif %}
+            {% if plan.skipped %}<span class="muted">No changes, so nothing is sent</span>{% endif %}
+          </div>
+          {% if plan.error %}
+            <div class="flash flash--error">Couldn't read this slicer's current settings, so it won't be updated: {{ plan.error }}</div>
+          {% endif %}
+          {{ ui.changes(plan) }}
+        </section>
+      {% endfor %}
+    {% endcall %}
   {% endfor %}
 
   <div class="form-actions">
@@ -48,4 +57,13 @@
     <button type="submit" class="button button--link" formaction="{{ url_for('admin.slicer_updates_edit') }}" formnovalidate>Back</button>
   </div>
 </form>
+{% endblock %}
+
+{% block extra_head %}
+<script src="{{ url_for('static', filename='js/workspace_sections.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    window.initWorkspaceSections({persist: false});
+  });
+</script>
 {% endblock %}
