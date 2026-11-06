@@ -1168,3 +1168,78 @@ def test_sync_json_accepts_the_csrf_header_the_panel_sends(app, client, monkeypa
     response = client.post(url, headers={**JSON_ACCEPT, "X-CSRFToken": token})
     assert response.status_code == 200
     assert response.get_json()["error"] is None
+
+
+# ---------------------------------------------------------------------------
+# Sync on the Dashboard
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_gives_admins_sync_buttons_and_the_panel(app, client):
+    acct = _account()
+    _slicer(acct, "a")
+    _login(client)
+    body = client.get("/").get_data(as_text=True)
+    assert 'form="sync-all"' in body
+    assert f'form="sync-{acct.id}"' in body
+    assert f'<form id="sync-{acct.id}"' in body
+    assert 'id="sync-progress"' in body
+    assert "js/sync_progress.js" in body
+    assert "window.initSyncProgress?.();" in body
+    assert 'name="return_to" value="dashboard"' in body
+
+
+def test_dashboard_hides_sync_from_regular_users(app, client):
+    from app.auth.passwords import hash_password
+
+    acct = _account()
+    pk = _slicer(acct, "a")
+    user = User(email="user@example.com", password_hash=hash_password("user-password"))
+    user.slicers.append(db.session.get(Slicer, pk))
+    db.session.add(user)
+    db.session.commit()
+    _login(client, "user@example.com", "user-password")
+    body = client.get("/").get_data(as_text=True)
+    assert "a" in body and 'class="slicer-card' in body
+    assert 'form="sync-' not in body
+    assert '<form id="sync-' not in body
+    assert 'id="sync-progress"' not in body
+    assert "data-sync-accounts" not in body
+    assert "/sync" not in body
+
+
+def test_dashboard_sync_button_disabled_without_a_key(app, client):
+    acct = UplynkAccount(label="NoKey", workspace_id="ws", legacy_api_key_encrypted=encrypt("k"))
+    db.session.add(acct)
+    db.session.flush()
+    _slicer(acct, "a")
+    _login(client)
+    body = client.get("/").get_data(as_text=True)
+    assert "disabled" in body[body.index(f'form="sync-{acct.id}"') :][:220]
+
+
+def test_sync_from_the_dashboard_returns_there_without_javascript(app, client, monkeypatch):
+    acct = _account()
+    monkeypatch.setattr(
+        "app.uplynk.sync.sync_account",
+        lambda account: SyncResult(account_id=account.id, account_label=account.label),
+    )
+    _login(client)
+    response = client.post(
+        f"/admin/uplynk-accounts/{acct.id}/sync", data={"return_to": "dashboard"}
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+
+
+def test_sync_ignores_an_unknown_return_to(app, client, monkeypatch):
+    acct = _account()
+    monkeypatch.setattr(
+        "app.uplynk.sync.sync_account",
+        lambda account: SyncResult(account_id=account.id, account_label=account.label),
+    )
+    _login(client)
+    response = client.post(
+        f"/admin/uplynk-accounts/{acct.id}/sync", data={"return_to": "https://evil.example"}
+    )
+    assert response.headers["Location"].endswith("/admin/uplynk-accounts")

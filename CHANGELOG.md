@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-11-06
+
+### ✨ Added
+- **Sync and Sync all on the Dashboard**, with the same progress panel, for
+  admins only. Regular users don't see them, since syncing is admin-only.
+
 ## [1.21.0] - 2026-11-06
 
 ### ✨ Added

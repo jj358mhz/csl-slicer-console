@@ -211,6 +211,8 @@ def sync_account_route(account_id: int):
 
     if request.form.get("return_to") == "slicer_updates":
         return redirect(url_for("admin.slicer_updates", slicer_ids=_posted_pks()))
+    if request.form.get("return_to") == "dashboard":
+        return redirect(url_for("main.index"))
     return redirect(url_for("admin.list_accounts"))
 
 
@@ -582,14 +584,7 @@ def slicer_updates():
         account_problems=sorted({p for p in problems.values() if p}),
         selected=set(_posted_pks()),
         unread=unread,
-        sync_accounts=[
-            {
-                "label": a.label,
-                "url": url_for("admin.sync_account_route", account_id=a.id),
-            }
-            for a in db.session.scalars(select(UplynkAccount).order_by(UplynkAccount.label))
-            if a.has_scoped_key
-        ],
+        sync_accounts=updates.syncable_accounts(),
     )
 
 
