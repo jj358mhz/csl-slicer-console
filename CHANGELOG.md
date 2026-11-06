@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.6] - 2026-11-06
+
+### 🐛 Fixed
+- **"Start a new update" is now a real button on the results page.** It was easy to
+  miss as a bold caption. It's the primary button when everything updated, and an
+  outlined one when Retry is offered, so Retry stays the main action.
+- **Primary buttons that are links keep their text on hover.** The text turned the
+  same pink as the hover background and disappeared. This also fixes Add Account,
+  Add Slicer and Add User.
+
 ## [1.21.5] - 2026-11-06
 
 ### ♻️ Changed

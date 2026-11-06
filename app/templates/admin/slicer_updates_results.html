@@ -67,7 +67,7 @@
       <button type="submit" class="button button--primary">Retry {{ retry_ids | length }} not updated</button>
     </form>
   {% endif %}
-  <a class="button button--link" href="{{ url_for('admin.slicer_updates') }}">Start a new update</a>
+  <a class="{{ 'btn-ghost' if retry_ids else 'button button--primary' }}" href="{{ url_for('admin.slicer_updates') }}">Start a new update</a>
 </div>
 {% endblock %}
 

@@ -1663,3 +1663,22 @@ def test_description_shared_in_the_box_can_be_changed(app, client, uplynk):
     sent = dict(uplynk.patches)
     assert sent["a"]["configuration"] == f"description:renamed\n{SHARED}\n"
     assert sent["b"]["configuration"] == f"description:renamed\n{SHARED}\n"
+
+
+def test_start_a_new_update_is_the_primary_button_when_nothing_needs_retrying(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    _login(client)
+    body = _apply(client, [pk], encoding_profile_id=GUID_B).get_data(as_text=True)
+    assert "Retry 1 not updated" not in body
+    assert re.search(r'<a class="button button--primary" href="[^"]*">Start a new update</a>', body)
+
+
+def test_retry_stays_the_primary_button_when_it_is_offered(app, client, uplynk):
+    pk = _slicer(_account(), "a")
+    uplynk.settings = {"a": _config("a")}
+    uplynk.responses = {"a": TargetStateResult(401, {"error": 1, "msg": "Not entitled"}, False)}
+    _login(client)
+    body = _apply(client, [pk], encoding_profile_id=GUID_B).get_data(as_text=True)
+    assert "Retry 1 not updated" in body
+    assert re.search(r'<a class="btn-ghost" href="[^"]*">Start a new update</a>', body)
