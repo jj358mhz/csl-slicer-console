@@ -70,6 +70,10 @@
     --success: #22c55e;
     --info: #38bdf8;
 
+    /* Floating batch bar: deep cyan, so it stands off the cards behind it */
+    --batch-bar-bg: #0f2a38;
+    --batch-bar-border: #22d3ee;
+
     /* Radii */
     --radius-sm: 4px;
     --radius: 6px;
@@ -1154,10 +1158,10 @@ form.inline {
     align-items: center;
     gap: 16px;
     padding: 12px 18px;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
+    background: var(--batch-bar-bg);
+    border: 2px solid var(--batch-bar-border);
     border-radius: var(--radius-lg);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7), 0 0 18px rgba(34, 211, 238, 0.25);
     z-index: 100;
 }
 
@@ -1170,12 +1174,21 @@ form.inline {
     color: var(--text-primary);
     font-size: 13px;
     padding-right: 14px;
-    border-right: 1px solid var(--border-strong);
+    border-right: 1px solid rgba(34, 211, 238, 0.4);
 }
 
 .batch-bar__actions {
     display: flex;
     gap: 8px;
+}
+
+/* The usual accent is too dim to read on the cyan background */
+.batch-bar .link-button {
+    color: #f78fbd;
+}
+
+.batch-bar .link-button:hover {
+    color: var(--text-primary);
 }
 
 
