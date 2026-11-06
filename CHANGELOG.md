@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.7] - 2026-11-06
+
+### ♻️ Changed
+- **The floating bar for selected slicers now stands out from the cards behind it.**
+  It has a deep cyan background, a bright cyan border and a soft glow, on both the
+  Dashboard and Slicer Updates. Clear selection uses a lighter pink so it stays
+  readable on the new background.
+
 ## [1.21.6] - 2026-11-06
 
 ### 🐛 Fixed
