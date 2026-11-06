@@ -101,17 +101,6 @@ def normalize_configuration(text: str | None) -> str:
     return "\n".join(line.rstrip() for line in lines).strip("\n")
 
 
-def _is_description(line: str) -> bool:
-    key, sep, _ = line.partition(":")
-    return bool(sep) and key.strip() == "description"
-
-
-def without_description(text: str | None) -> str:
-    """The configuration minus its `description` line: what a batch's box shows (#71)."""
-    lines = normalize_configuration(text).split("\n")
-    return "\n".join(line for line in lines if not _is_description(line))
-
-
 def _line_key(line: str) -> str:
     """What identifies a line: its key, or the whole line if it has none."""
     key, sep, _ = line.partition(":")
@@ -136,7 +125,7 @@ def shared_lines(configurations: list[str | None]) -> tuple[str, list[str]]:
     lines: dict[str, str] = {}
     differing: list[str] = []
     for configuration in configurations:
-        for line in without_description(configuration).split("\n"):
+        for line in normalize_configuration(configuration).split("\n"):
             if not line.strip():
                 continue
             key = _line_key(line)
@@ -151,16 +140,16 @@ def shared_lines(configurations: list[str | None]) -> tuple[str, list[str]]:
 
 
 def line_values(text: str | None) -> dict[str, str]:
-    """The configuration's values by key, leaving out `description`."""
-    lines = without_description(text).split("\n")
+    """The configuration's values by key."""
+    lines = normalize_configuration(text).split("\n")
     return {_line_key(line): _line_value(line) for line in lines if line.strip()}
 
 
 def added_keys(before: str, after: str) -> set[str]:
-    """Settings present in `after` but not `before`, leaving out `description`."""
+    """Settings present in `after` but not `before`."""
     return (
-        _lines_by_key(without_description(after)).keys()
-        - _lines_by_key(without_description(before)).keys()
+        _lines_by_key(normalize_configuration(after)).keys()
+        - _lines_by_key(normalize_configuration(before)).keys()
     )
 
 
@@ -170,7 +159,7 @@ def apply_overrides(text: str, overrides: dict[str, str]) -> str:
     placed = set()
     for line in normalize_configuration(text).split("\n"):
         key = _line_key(line)
-        if key not in overrides or _is_description(line):
+        if key not in overrides:
             result.append(line)
         elif key not in placed:
             result.append(f"{key}:{overrides[key]}")
@@ -185,11 +174,10 @@ def apply_line_edits(current: str | None, before: str, after: str) -> str:
     Uplynk replaces the whole configuration, so only the lines the admin changed,
     added or removed may differ from what the slicer already has. A changed line
     only applies where the slicer has that key, so it can't switch a setting on
-    by accident. A line added as new goes to every slicer. Description lines are
-    never touched.
+    by accident. A line added as new goes to every slicer.
     """
-    old = _lines_by_key(without_description(before))
-    new = _lines_by_key(without_description(after))
+    old = _lines_by_key(normalize_configuration(before))
+    new = _lines_by_key(normalize_configuration(after))
     changed = {key: line for key, line in new.items() if old.get(key) != line}
     removed = old.keys() - new.keys()
 

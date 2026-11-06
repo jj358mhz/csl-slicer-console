@@ -56,14 +56,13 @@ OUT_OF_TIME = "Not reached in time. Nothing was sent to this slicer."
 
 
 def _posted_overrides(form) -> tuple[tuple[str, str], ...]:
-    """Ticked Override rows. `description` can't be overridden in a batch."""
+    """Ticked Override rows."""
     overrides = []
     for name in form:
         if name.startswith("override_on:"):
             key = name.removeprefix("override_on:")
-            if key != "description":
-                value = form.get(f"override_value:{key}", "")
-                overrides.append((key, " ".join(value.split("\n")).strip()))
+            value = form.get(f"override_value:{key}", "")
+            overrides.append((key, " ".join(value.split("\n")).strip()))
     return tuple(sorted(overrides))
 
 

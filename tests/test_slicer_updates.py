@@ -19,7 +19,6 @@ from app.uplynk.slicer_config import (
     line_values,
     normalize_configuration,
     shared_lines,
-    without_description,
 )
 from app.uplynk.sync import SyncResult
 from app.uplynk.target_state import TargetStateResult, patch_slicer
@@ -141,11 +140,6 @@ def test_normalize_configuration_handles_browser_line_endings():
     assert normalize_configuration(None) == ""
 
 
-def test_without_description():
-    text = "description: My Slicer\npids:1,2\ndescriptive:no\n"
-    assert without_description(text) == "pids:1,2\ndescriptive:no"
-
-
 # ---------------------------------------------------------------------------
 # Planning
 # ---------------------------------------------------------------------------
@@ -184,13 +178,6 @@ def test_batch_config_keeps_each_slicers_description():
     plan = updates.build_plan(_target(), "Stopped", _config("own-name"), update)
     assert plan.fields["configuration"] == f"description:own-name\n{edited}\n"
     assert [(d.removed, d.text) for d in plan.diff] == [(True, "gain:0.0"), (False, "gain:1.0")]
-
-
-def test_batch_config_ignores_a_description_typed_into_the_box():
-    typed = f"description:everyone\n{SHARED}\nnew:1"
-    update = updates.UpdateRequest(configuration=typed, config_base=SHARED, batch=True)
-    plan = updates.build_plan(_target(), "Stopped", _config("own-name"), update)
-    assert plan.fields["configuration"] == f"description:own-name\n{SHARED}\nnew:1\n"
 
 
 def test_batch_config_keeps_settings_that_differ_between_slicers():
@@ -250,9 +237,6 @@ def test_batch_config_leaves_a_slicer_alone_if_the_edit_is_already_there():
         ("oddline\nmine:x", "oddline", "", "mine:x"),
         # A repeated key ends up once, where it first appeared.
         ("a:1\nmine:x\na:2", "a:1", "a:9", "a:9\nmine:x"),
-        # Description lines are never touched, even if typed into the box.
-        ("description:mine\na:1", "a:1", "description:all\na:1", "description:mine\na:1"),
-        ("description:mine\na:1", "description:mine\na:1", "a:1", "description:mine\na:1"),
     ],
 )
 def test_apply_line_edits(current, before, after, expected):
@@ -511,7 +495,8 @@ def test_edit_fetches_current_settings_and_shows_differences(app, client, uplynk
     assert "drm_mode:studio" in box
     assert "gain:" not in box
     assert "description:" not in box
-    assert "Settings that differ (1)" in body
+    assert "Settings that differ (2)" in body
+    assert 'name="override_on:description"' in body
     assert 'name="override_on:gain"' in body
     assert "2 values on 2 of 2 slicers" in body
     # Locked until Override is ticked.
@@ -1328,7 +1313,7 @@ def test_batch_new_line_reaches_every_slicer():
 def test_shared_lines_leaves_out_values_that_differ():
     east = "description:east\ngain:0.0\nlibraries:aaa\n"
     west = "description:west\ngain:0.0\nlibraries:bbb\n"
-    assert shared_lines([east, west]) == ("gain:0.0", ["libraries"])
+    assert shared_lines([east, west]) == ("gain:0.0", ["description", "libraries"])
 
 
 def test_shared_lines_keeps_a_setting_only_some_slicers_have():
@@ -1357,7 +1342,7 @@ def test_batch_box_flow_keeps_libraries_and_can_set_them_on_purpose():
     east = _config("east", shared="cc1_desc:EnglishO\nlibraries:aaa")
     base, differing = shared_lines([east.configuration, west.configuration])
     assert base == "cc1_desc:EnglishO"
-    assert differing == ["libraries"]
+    assert differing == ["description", "libraries"]
 
     edited = updates.UpdateRequest(configuration="cc1_desc:English", config_base=base, batch=True)
     plan = updates.build_plan(_target(), "Stopped", west, edited)
@@ -1380,11 +1365,12 @@ def test_apply_overrides_only_where_the_setting_exists():
     assert apply_overrides("a:1\nlibraries:bbb", {"libraries": "ccc"}) == "a:1\nlibraries:ccc"
     assert apply_overrides("a:1", {"libraries": "ccc"}) == "a:1"
     assert apply_overrides("a:1\nb:2\na:3", {"a": "9"}) == "a:9\nb:2"
-    assert apply_overrides("description:x\na:1", {"description": "y"}) == "description:x\na:1"
+    assert apply_overrides("description:x\na:1", {"description": "y"}) == "description:y\na:1"
 
 
-def test_line_values_leaves_out_description():
+def test_line_values():
     assert line_values("description:x\ngain: 1\nurl:http://a:1\n") == {
+        "description": "x",
         "gain": "1",
         "url": "http://a:1",
     }
@@ -1423,7 +1409,10 @@ def test_form_reads_only_ticked_overrides():
         "override_on:description": "1",
         "override_value:description": "all",
     }
-    assert updates.UpdateRequest.from_form(form).overrides == (("libraries", "ccc"),)
+    assert updates.UpdateRequest.from_form(form).overrides == (
+        ("description", "all"),
+        ("libraries", "ccc"),
+    )
 
 
 def test_review_shows_an_override_and_carries_it_to_apply(app, client, uplynk):
@@ -1583,3 +1572,94 @@ def test_single_slicer_edit_can_add_any_line(app, client, uplynk):
     _login(client)
     _apply(client, [pk], configuration=f"{text}\nlibraries:ccc", config_base=text)
     assert "libraries:ccc" in uplynk.patches[0][1]["configuration"]
+
+
+# ---------------------------------------------------------------------------
+# description is an ordinary setting
+# ---------------------------------------------------------------------------
+
+
+def test_description_differing_is_a_locked_row_showing_each_value(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {"a": _config("name-a"), "b": _config("name-b")}
+    _login(client)
+    body = client.post("/admin/slicer-updates/edit", data={"slicer_ids": pks}).get_data(
+        as_text=True
+    )
+    box = body[body.index('name="configuration"') : body.index("</textarea>")]
+    assert "description:" not in box
+    assert "Settings that differ (1)" in body
+    assert 'name="override_on:description"' in body
+    assert "name-a" in body
+    assert "name-b" in body
+
+
+def test_shared_description_shows_in_the_box(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {"a": _config("same"), "b": _config("same")}
+    _login(client)
+    body = client.post("/admin/slicer-updates/edit", data={"slicer_ids": pks}).get_data(
+        as_text=True
+    )
+    box = body[body.index('name="configuration"') : body.index("</textarea>")]
+    assert "description:same" in box
+    assert "Settings that differ" not in body
+
+
+def test_batch_without_override_keeps_each_description(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {"a": _config("name-a"), "b": _config("name-b")}
+    edited = SHARED.replace("gain:0.0", "gain:1.0")
+    _login(client)
+    _apply(client, pks, configuration=edited, config_base=SHARED)
+    sent = dict(uplynk.patches)
+    assert sent["a"]["configuration"] == f"description:name-a\n{edited}\n"
+    assert sent["b"]["configuration"] == f"description:name-b\n{edited}\n"
+
+
+def test_description_override_sets_one_value_on_purpose(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {"a": _config("name-a"), "b": _config("name-b")}
+    _login(client)
+    _apply(
+        client,
+        pks,
+        **{"override_on:description": "1", "override_value:description": "Pool 1"},
+    )
+    sent = dict(uplynk.patches)
+    assert sent["a"]["configuration"] == f"description:Pool 1\n{SHARED}\n"
+    assert sent["b"]["configuration"] == f"description:Pool 1\n{SHARED}\n"
+
+
+def test_typing_a_differing_description_into_the_box_is_refused(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {"a": _config("name-a"), "b": _config("name-b")}
+    _login(client)
+    body = client.post(
+        "/admin/slicer-updates/review",
+        data={
+            "slicer_ids": pks,
+            "batch": "1",
+            "configuration": f"description:everyone\n{SHARED}",
+            "config_base": SHARED,
+        },
+    ).get_data(as_text=True)
+    assert "These settings differ between the selected slicers: description." in body
+    assert uplynk.patches == []
+
+
+def test_description_shared_in_the_box_can_be_changed(app, client, uplynk):
+    acct = _account()
+    pks = [_slicer(acct, "a"), _slicer(acct, "b")]
+    uplynk.settings = {"a": _config("same"), "b": _config("same")}
+    base = f"description:same\n{SHARED}"
+    _login(client)
+    _apply(client, pks, configuration=base.replace("same", "renamed"), config_base=base)
+    sent = dict(uplynk.patches)
+    assert sent["a"]["configuration"] == f"description:renamed\n{SHARED}\n"
+    assert sent["b"]["configuration"] == f"description:renamed\n{SHARED}\n"
