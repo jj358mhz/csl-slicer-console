@@ -57,12 +57,12 @@ window.initWorkspaceSections = function ({persist = true} = {}) {
         saveCollapsed(collapsed);
     }
 
-    // Header click toggles, but clicks on the Select-all label don't.
+    // Header click toggles, but clicks on Select all or a header button don't.
     sections.forEach(sec => {
         const header = sec.querySelector('.account-section__header');
         if (!header) return;
         header.addEventListener('click', function (e) {
-            if (e.target.closest('.section-selectall')) return;
+            if (e.target.closest('.section-selectall, .account-section__action')) return;
             toggleSection(sec);
         });
     });

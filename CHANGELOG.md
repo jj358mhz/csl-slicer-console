@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.20.2] - 2026-11-06
+
+### 🐛 Fixed
+- **Slicer Updates shows every slicer's version and encoding profile.** The
+  Select list used stored copies, which only exist for slicers captured while
+  running, so slicers that hadn't run showed `—`, and states could be out of
+  date. It now reads live values from Uplynk with one list call per account,
+  and falls back to the stored copy with a warning if an account can't be read.
+- The Select list shows full encoding profile IDs, so they can be read and copied.
+
+### ✨ Added
+- **Sync and Sync all** on Slicer Updates, to pick up slicers added or removed
+  in Uplynk without leaving the page. Ticked slicers stay ticked. Sync all names
+  any accounts it runs out of time for, so they can be synced individually, and
+  asks for confirmation first because it can mark slicers inactive everywhere.
+
 ## [1.20.1] - 2026-11-06
 
 ### 🐛 Fixed

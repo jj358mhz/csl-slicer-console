@@ -10,6 +10,7 @@
       <input type="search" id="slicer-filter" class="input slicer-filter"
              placeholder="Filter slicers…" title="Matches slicer id, description, region, protocol, or “starred”" autocomplete="off"
              aria-label="Filter slicers">
+      <button type="submit" class="btn-ghost" form="sync-all" title="Find slicers added or removed in Uplynk, for every account">Sync all</button>
       {{ ui.collapse_controls() }}
     {% endif %}
     <span class="badge">Admin only</span>
@@ -24,6 +25,13 @@
   </div>
 {% endfor %}
 
+{% if unread %}
+  <div class="updates-warning" role="alert">
+    <div class="updates-warning__title">Couldn't read current values from Uplynk</div>
+    Showing the last captured values, which may be out of date or blank, for: {{ unread | join(', ') }}.
+  </div>
+{% endif %}
+
 {% if groups %}
 {{ ui.workspace_nav(groups) }}
 <form method="post" action="{{ url_for('admin.slicer_updates_edit') }}" class="updates-select-form">
@@ -37,10 +45,16 @@
           {{ account_label }}
           <span class="account-section__count">(<span data-section-count>{{ rows | length }}</span>)</span>
         </h2>
-        <label class="section-selectall"{% if blocked %} title="This account's saved key can't make updates"{% endif %}>
-          <input type="checkbox" class="section-selectall__cb" data-section="{{ account_label }}"{% if blocked %} disabled{% endif %}>
-          <span>Select all</span>
-        </label>
+        <div class="updates-section-actions">
+          {# Its form sits outside the Select form, so Enter on a checkbox can't start a sync. #}
+          <button type="submit" class="btn-ghost account-section__action" form="sync-{{ rows[0][0].uplynk_account_id }}"
+                  title="{{ 'Find slicers added or removed in Uplynk' if rows[0][0].uplynk_account.has_scoped_key else 'Upload a scoped API key to enable sync' }}"
+                  {% if not rows[0][0].uplynk_account.has_scoped_key %}disabled{% endif %}>Sync</button>
+          <label class="section-selectall"{% if blocked %} title="This account's saved key can't make updates"{% endif %}>
+            <input type="checkbox" class="section-selectall__cb" data-section="{{ account_label }}"{% if blocked %} disabled{% endif %}>
+            <span>Select all</span>
+          </label>
+        </div>
       </div>
       <div class="account-section__body">
         <div class="updates-table-box">
@@ -56,7 +70,7 @@
               </tr>
             </thead>
             <tbody>
-              {% for s, config in rows %}
+              {% for s, config, state in rows %}
                 {% set is_starred = s.id in starred %}
                 <tr class="updates-row{% if blocked %} updates-row--blocked{% endif %}"
                     data-search="{{ [s.slicer_id, s.description, s.region, s.protocol, s.connection_mode, 'starred' if is_starred else None] | select | join(' ') | lower }}">
@@ -70,14 +84,10 @@
                     <div class="mono"><strong>{{ s.slicer_id }}</strong>{% if is_starred %} <span class="updates-row__star" title="Starred">★</span>{% endif %}</div>
                     {% if s.description %}<div class="muted">{{ s.description }}</div>{% endif %}
                   </td>
-                  <td>{{ ui.state_badge(s.last_state) }}</td>
+                  <td>{{ ui.state_badge(state) }}</td>
                   <td>{{ s.region or '—' }}</td>
                   <td class="mono">{{ config.slicer_version if config and config.slicer_version else '—' }}</td>
-                  <td class="mono">
-                    {% if config and config.encoding_profile_id %}
-                      <span title="{{ config.encoding_profile_id }}">{{ config.encoding_profile_id[:8] }}…{{ config.encoding_profile_id[-4:] }}</span>
-                    {% else %}—{% endif %}
-                  </td>
+                  <td class="mono updates-row__profile">{{ config.encoding_profile_id if config and config.encoding_profile_id else '—' }}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -86,7 +96,6 @@
       </div>
     </section>
   {% endfor %}
-  <p class="field__help">These are the last captured values. Current settings are fetched from Uplynk when you continue.</p>
 
   {# Floats once anything is selected, so long lists don't mean scrolling back for it. #}
   <div id="batch-bar" class="batch-bar" hidden>
@@ -95,6 +104,17 @@
     <button type="button" id="batch-clear" class="link-button">Clear selection</button>
   </div>
 </form>
+<form id="sync-all" class="updates-sync-form" method="post" action="{{ url_for('admin.slicer_updates_sync_all') }}"
+      onsubmit="return confirm('Sync all {{ sync_account_count }} account{{ '' if sync_account_count == 1 else 's' }}? Slicers removed from Uplynk will be marked inactive.');">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% for account_label, rows in groups %}
+  <form id="sync-{{ rows[0][0].uplynk_account_id }}" class="updates-sync-form" method="post"
+        action="{{ url_for('admin.sync_account_route', account_id=rows[0][0].uplynk_account_id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="return_to" value="slicer_updates">
+  </form>
+{% endfor %}
 {% else %}
   <div class="card"><p class="muted">No active slicers.</p></div>
 {% endif %}
@@ -170,7 +190,20 @@
       if (event.key === 'Enter') event.preventDefault();
     });
 
-    // Coming Back from Edit: open any workspace holding a selected slicer for
+    // A sync reloads the page, so carry the ticked slicers through it.
+    document.querySelectorAll('.updates-sync-form').forEach(form => {
+      form.addEventListener('submit', function () {
+        document.querySelectorAll('.slicer-checkbox:checked').forEach(box => {
+          const carried = document.createElement('input');
+          carried.type = 'hidden';
+          carried.name = 'slicer_ids';
+          carried.value = box.value;
+          form.appendChild(carried);
+        });
+      });
+    });
+
+    // Coming Back from Edit or a sync: open any workspace holding a selected slicer for
     // this visit, without changing what's remembered.
     document.querySelectorAll('.slicer-checkbox:checked').forEach(box => {
       box.closest('.account-section').classList.remove('account-section--collapsed');

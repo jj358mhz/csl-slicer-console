@@ -18,6 +18,7 @@ from app.uplynk.slicer_config import (
     with_description,
     without_description,
 )
+from app.uplynk.sync import SyncResult
 from app.uplynk.target_state import TargetStateResult, patch_slicer
 from app.uplynk.update_status import (
     WRITE_SCOPE,
@@ -802,3 +803,253 @@ def test_dashboard_uses_the_shared_section_script(app, client):
     assert "js/workspace_sections.js" in body
     assert "window.initWorkspaceSections();" in body
     assert client.get("/static/js/workspace_sections.js").status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Select reads live values
+# ---------------------------------------------------------------------------
+
+
+def test_list_slicer_snapshots_parses_state_and_settings(ec_keypair):
+    session = MagicMock()
+    session.get.return_value = _response(
+        200,
+        {
+            "items": [
+                {
+                    "id": "s1",
+                    "slicer_version": "v9",
+                    "encoding_profile_id": GUID_B,
+                    "status": {"state": "Ready"},
+                }
+            ]
+        },
+    )
+    snapshots = _client(ec_keypair, session).list_slicer_snapshots()
+    state, config = snapshots["s1"]
+    assert state == "Ready"
+    assert config.slicer_version == "v9"
+    assert config.encoding_profile_id == GUID_B
+    assert session.get.call_args.args[0].endswith("/cloud-slicers/live/slicers")
+
+
+def test_select_shows_live_values_for_a_slicer_never_captured(app, client, monkeypatch):
+    pk = _slicer(_account(), "never_ran", state="Stopped")
+    monkeypatch.setattr(
+        UplynkDiscoveryClient,
+        "list_slicer_snapshots",
+        lambda self: {
+            "never_ran": (
+                "Slicing",
+                SlicerConfig(slicer_version="260604.03.01", encoding_profile_id=GUID_A),
+            )
+        },
+    )
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert db.session.get(Slicer, pk).config_encrypted is None
+    assert "260604.03.01" in body
+    assert f'<td class="mono updates-row__profile">{GUID_A}</td>' in body
+    assert "badge--state--slicing" in body
+    assert "Couldn't read current values" not in body
+
+
+def test_select_reads_accounts_with_a_read_only_key(app, client, monkeypatch):
+    _slicer(_account("ReadOnly", scp=READ_SCOPE), "a")
+    monkeypatch.setattr(
+        UplynkDiscoveryClient,
+        "list_slicer_snapshots",
+        lambda self: {"a": ("Stopped", SlicerConfig(slicer_version="v9"))},
+    )
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert ">v9<" in body
+
+
+def test_select_falls_back_to_the_stored_copy_and_says_so(app, client, monkeypatch):
+    pk = _slicer(_account("Down"), "a", state="Blackout")
+    slicer = db.session.get(Slicer, pk)
+    slicer.config_encrypted = encrypt(SlicerConfig(slicer_version="stored-v").to_json())
+    db.session.commit()
+
+    def fail(self):
+        raise UplynkAPIError("Uplynk API returned HTTP 500: boom")
+
+    monkeypatch.setattr(UplynkDiscoveryClient, "list_slicer_snapshots", fail)
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert "stored-v" in body
+    assert "badge--state--blackout" in body
+    assert "Couldn't read current values from Uplynk" in body
+    assert "for: Down." in body
+
+
+def test_select_warns_about_an_account_with_no_scoped_key(app, client):
+    acct = UplynkAccount(label="NoKey", workspace_id="ws", legacy_api_key_encrypted=encrypt("k"))
+    db.session.add(acct)
+    db.session.flush()
+    _slicer(acct, "a")
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert "for: NoKey." in body
+
+
+def test_select_uses_stored_values_for_a_slicer_missing_from_the_list(app, client, monkeypatch):
+    pk = _slicer(_account(), "gone")
+    slicer = db.session.get(Slicer, pk)
+    slicer.config_encrypted = encrypt(SlicerConfig(slicer_version="stored-v").to_json())
+    db.session.commit()
+    monkeypatch.setattr(UplynkDiscoveryClient, "list_slicer_snapshots", lambda self: {})
+    _login(client)
+    assert "stored-v" in client.get("/admin/slicer-updates").get_data(as_text=True)
+
+
+# ---------------------------------------------------------------------------
+# Sync from the tab
+# ---------------------------------------------------------------------------
+
+
+def test_select_has_a_sync_button_outside_the_select_form(app, client):
+    acct = _account()
+    _slicer(acct, "a")
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert f'form="sync-{acct.id}"' in body
+    select_form_end = body.index("</form>", body.index('class="updates-select-form"'))
+    assert body.index(f'<form id="sync-{acct.id}"') > select_form_end
+    assert f'action="/admin/uplynk-accounts/{acct.id}/sync"' in body
+
+
+def test_sync_button_is_disabled_without_a_scoped_key(app, client):
+    acct = UplynkAccount(label="NoKey", workspace_id="ws", legacy_api_key_encrypted=encrypt("k"))
+    db.session.add(acct)
+    db.session.flush()
+    _slicer(acct, "a")
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    button = body[body.index(f'form="sync-{acct.id}"') :][:200]
+    assert "disabled" in button
+
+
+def test_sync_from_the_tab_returns_there_keeping_the_selection(app, client, monkeypatch):
+    acct = _account()
+    pk = _slicer(acct, "a")
+    monkeypatch.setattr(
+        "app.uplynk.sync.sync_account",
+        lambda account: SyncResult(account_id=account.id, account_label=account.label, created=2),
+    )
+    _login(client)
+    response = client.post(
+        f"/admin/uplynk-accounts/{acct.id}/sync",
+        data={"return_to": "slicer_updates", "slicer_ids": [pk]},
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(f"/admin/slicer-updates?slicer_ids={pk}")
+
+
+def test_sync_from_the_accounts_page_still_returns_there(app, client, monkeypatch):
+    acct = _account()
+    monkeypatch.setattr(
+        "app.uplynk.sync.sync_account",
+        lambda account: SyncResult(account_id=account.id, account_label=account.label),
+    )
+    _login(client)
+    response = client.post(f"/admin/uplynk-accounts/{acct.id}/sync")
+    assert response.headers["Location"].endswith("/admin/uplynk-accounts")
+
+
+def test_sync_requires_an_admin(app, client):
+    from app.auth.passwords import hash_password
+
+    acct = _account()
+    db.session.add(
+        User(email="user@example.com", password_hash=hash_password("user-password"), is_admin=False)
+    )
+    db.session.commit()
+    _login(client, "user@example.com", "user-password")
+    assert client.post(f"/admin/uplynk-accounts/{acct.id}/sync").status_code == 403
+
+
+def test_sync_all_syncs_each_account_with_a_key(app, client, monkeypatch):
+    first, second = _account("alpha"), _account("beta")
+    no_key = UplynkAccount(label="NoKey", workspace_id="n", legacy_api_key_encrypted=encrypt("k"))
+    db.session.add(no_key)
+    db.session.commit()
+    pk = _slicer(first, "a")
+    synced = []
+
+    def fake_sync(account):
+        synced.append(account.label)
+        return SyncResult(account_id=account.id, account_label=account.label, created=1)
+
+    monkeypatch.setattr("app.uplynk.sync.sync_account", fake_sync)
+    _login(client)
+    response = client.post("/admin/slicer-updates/sync-all", data={"slicer_ids": [pk]})
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(f"/admin/slicer-updates?slicer_ids={pk}")
+    assert synced == ["alpha", "beta"]
+    assert second.id
+
+
+def test_sync_all_continues_past_a_failed_account(app, client, monkeypatch):
+    _account("alpha")
+    _account("beta")
+    db.session.commit()
+
+    def fake_sync(account):
+        error = "boom" if account.label == "alpha" else None
+        return SyncResult(account_id=account.id, account_label=account.label, error=error)
+
+    monkeypatch.setattr("app.uplynk.sync.sync_account", fake_sync)
+    _login(client)
+    body = client.post("/admin/slicer-updates/sync-all", follow_redirects=True).get_data(
+        as_text=True
+    )
+    assert "Sync failed for &#39;alpha&#39;: boom" in body
+    assert "Synced &#39;beta&#39;" in body
+
+
+def test_sync_all_names_accounts_it_ran_out_of_time_for(app, client, monkeypatch):
+    _account("alpha")
+    db.session.commit()
+    synced = []
+    monkeypatch.setattr("app.uplynk.sync.sync_account", lambda account: synced.append(account))
+    monkeypatch.setattr("app.admin.routes.SYNC_ALL_BUDGET_SECONDS", -1)
+    _login(client)
+    body = client.post("/admin/slicer-updates/sync-all", follow_redirects=True).get_data(
+        as_text=True
+    )
+    assert synced == []
+    assert "Ran out of time before syncing: alpha." in body
+
+
+def test_sync_all_requires_an_admin(app, client):
+    from app.auth.passwords import hash_password
+
+    db.session.add(
+        User(email="user@example.com", password_hash=hash_password("user-password"), is_admin=False)
+    )
+    db.session.commit()
+    _login(client, "user@example.com", "user-password")
+    assert client.post("/admin/slicer-updates/sync-all").status_code == 403
+
+
+def test_select_has_a_sync_all_button_outside_the_select_form(app, client):
+    _slicer(_account(), "a")
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert 'form="sync-all"' in body
+    select_form_end = body.index("</form>", body.index('class="updates-select-form"'))
+    assert body.index('<form id="sync-all"') > select_form_end
+
+
+def test_sync_all_asks_for_confirmation_naming_the_account_count(app, client):
+    _slicer(_account("alpha"), "a")
+    _account("beta")
+    no_key = UplynkAccount(label="NoKey", workspace_id="n", legacy_api_key_encrypted=encrypt("k"))
+    db.session.add(no_key)
+    db.session.commit()
+    _login(client)
+    body = client.get("/admin/slicer-updates").get_data(as_text=True)
+    assert "return confirm(&#39;Sync all 2 accounts?" not in body
+    assert "return confirm('Sync all 2 accounts? Slicers removed from Uplynk" in body
