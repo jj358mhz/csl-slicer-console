@@ -82,6 +82,8 @@ class UplynkAccount(Base):
     scoped_scp: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # A paused account isn't synced or polled, and its slicers are left out of lists.
+    is_paused: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )

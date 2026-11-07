@@ -21,12 +21,13 @@ def index() -> str:
             db.session.query(Slicer)
             .filter_by(is_active=True)
             .join(UplynkAccount)
+            .filter(UplynkAccount.is_paused.is_(False))
             .order_by(UplynkAccount.label, Slicer.slicer_id)
             .all()
         )
     else:
         slicers = sorted(
-            current_user.slicers,
+            (s for s in current_user.slicers if not s.uplynk_account.is_paused),
             key=lambda s: (s.uplynk_account.label, s.slicer_id),
         )
 

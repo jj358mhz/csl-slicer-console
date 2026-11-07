@@ -22,7 +22,10 @@
     <tbody>
       {% for acct in accounts %}
         <tr>
-          <td><strong>{{ acct.label }}</strong></td>
+          <td>
+            <strong>{{ acct.label }}</strong>
+            {% if acct.is_paused %}<span class="badge badge--paused">Paused</span>{% endif %}
+          </td>
           <td class="mono">{{ acct.workspace_id }}</td>
           <td class="mono">{{ previews[acct.id].legacy }}</td>
           <td class="mono">
@@ -46,10 +49,26 @@
                   class="inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="link-button"
-                      {% if not previews[acct.id].scoped_kid %}disabled title="Upload a scoped API key .env file to enable sync"{% endif %}>
+                      {% if acct.is_paused %}disabled title="Resume this account to sync it"
+                      {% elif not previews[acct.id].scoped_kid %}disabled title="Upload a scoped API key .env file to enable sync"{% endif %}>
                 Sync
               </button>
             </form>
+            {% if acct.is_paused %}
+              <form method="post" action="{{ url_for('admin.resume_account', account_id=acct.id) }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="link-button">Resume</button>
+              </form>
+            {% else %}
+              {% set pause_prompt = "Pause Uplynk account " ~ acct.label ~ "? Its slicers leave the console's lists and stop being polled, but keep running in Uplynk." %}
+              <form method="post"
+                    action="{{ url_for('admin.pause_account', account_id=acct.id) }}"
+                    class="inline"
+                    onsubmit='return confirm({{ pause_prompt | tojson }});'>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="link-button">Pause</button>
+              </form>
+            {% endif %}
             <a href="{{ url_for('admin.edit_account', account_id=acct.id) }}">Edit</a>
             <form method="post"
                   action="{{ url_for('admin.delete_account', account_id=acct.id) }}"

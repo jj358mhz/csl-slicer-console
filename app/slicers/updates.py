@@ -216,18 +216,18 @@ def syncable_accounts() -> list[dict[str, str]]:
     return [
         {"label": a.label, "url": url_for("admin.sync_account_route", account_id=a.id)}
         for a in accounts
-        if a.has_scoped_key
+        if a.has_scoped_key and not a.is_paused
     ]
 
 
 def list_updatable_slicers() -> list[Slicer]:
-    """Every active slicer, grouped by account."""
+    """Every active slicer on an unpaused account, grouped by account."""
     return list(
         db.session.scalars(
             select(Slicer)
             .join(Slicer.uplynk_account)
             .options(joinedload(Slicer.uplynk_account))
-            .where(Slicer.is_active.is_(True))
+            .where(Slicer.is_active.is_(True), UplynkAccount.is_paused.is_(False))
             .order_by(UplynkAccount.label, Slicer.slicer_id)
         )
     )

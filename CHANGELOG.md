@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-11-06
+
+### ✨ Added
+- **Pause and Resume for Uplynk accounts.** A paused account isn't synced or polled,
+  and its slicers leave the Dashboard, Slicer Updates, Admin Slicers, the user
+  assignment form and the new slicer account list. Direct requests for them are
+  refused. Slicers keep running in Uplynk, and Resume brings back everything,
+  including stars and user assignments. Both actions are in the audit log.
+  Paused slicers stay in the Audit Log filter so past activity can still be found.
+
+### 🗄️ Database
+- Adds `uplynk_accounts.is_paused`. Existing accounts start unpaused.
+
 ## [1.21.7] - 2026-11-06
 
 ### ♻️ Changed

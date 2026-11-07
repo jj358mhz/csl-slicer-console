@@ -51,8 +51,11 @@ class ControlOutcome:
 
 
 def _user_can_control(user: User, slicer: Slicer) -> bool:
-    """Admins can control any active slicer; regular users only assigned ones."""
-    if not slicer.is_active:
+    """Admins can control any active slicer; regular users only assigned ones.
+
+    Slicers on a paused account are off limits to everyone until it's resumed.
+    """
+    if not slicer.is_active or slicer.uplynk_account.is_paused:
         return False
     if user.is_admin:
         return True
@@ -329,11 +332,14 @@ def poll_account_slicer_states(user: User, account: UplynkAccount) -> list[Slice
     data — the badge template will render whatever we last saw, matching
     the single-slicer path's stale-on-error behavior.
 
-    Raises SlicerAccessDenied if the user has no visible slicers on this
-    account and isn't admin.
+    Raises SlicerAccessDenied if the account is paused, or if the user has no
+    visible slicers on this account and isn't admin.
     Raises UplynkAPIError on Uplynk-side failures — caller decides how to
     render.
     """
+    if account.is_paused:
+        raise SlicerAccessDenied(f"Account {account.label!r} is paused")
+
     if user.is_admin:
         visible = [s for s in account.slicers if s.is_active]
     else:
