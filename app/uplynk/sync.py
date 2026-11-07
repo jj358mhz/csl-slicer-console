@@ -37,6 +37,10 @@ def sync_account(account: UplynkAccount) -> SyncResult:
     """
     result = SyncResult(account_id=account.id, account_label=account.label)
 
+    if account.is_paused:
+        result.error = "This account is paused. Resume it to sync."
+        return result
+
     if not account.has_scoped_key:
         result.error = (
             "No scoped API key configured — upload the .env file from the "

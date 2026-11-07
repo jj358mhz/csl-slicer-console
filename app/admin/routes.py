@@ -155,6 +155,36 @@ def delete_account(account_id: int):
     return redirect(url_for("admin.list_accounts"))
 
 
+@bp.route("/uplynk-accounts/<int:account_id>/pause", methods=["POST"])
+@admin_required
+def pause_account(account_id: int):
+    acct = db.session.get(UplynkAccount, account_id)
+    if acct is None:
+        abort(404)
+    acct.is_paused = True
+    db.session.commit()
+    log_admin_event(
+        "uplynk_account", "pause", f"Paused Uplynk account '{acct.label}'", target=acct.label
+    )
+    flash(f"Uplynk account '{acct.label}' paused. Its slicers keep running in Uplynk.", "info")
+    return redirect(url_for("admin.list_accounts"))
+
+
+@bp.route("/uplynk-accounts/<int:account_id>/resume", methods=["POST"])
+@admin_required
+def resume_account(account_id: int):
+    acct = db.session.get(UplynkAccount, account_id)
+    if acct is None:
+        abort(404)
+    acct.is_paused = False
+    db.session.commit()
+    log_admin_event(
+        "uplynk_account", "resume", f"Resumed Uplynk account '{acct.label}'", target=acct.label
+    )
+    flash(f"Uplynk account '{acct.label}' resumed. Sync it to pick up any changes.", "success")
+    return redirect(url_for("admin.list_accounts"))
+
+
 def _sync_and_log(acct: UplynkAccount):
     """Sync one account and record the outcome in the audit log."""
     from app.uplynk.sync import sync_account
@@ -322,6 +352,7 @@ def assign_slicers(user_id: int):
         db.session.query(Slicer)
         .filter_by(is_active=True)
         .join(UplynkAccount)
+        .filter(UplynkAccount.is_paused.is_(False))
         .order_by(UplynkAccount.label, Slicer.slicer_id)
         .all()
     )
@@ -333,7 +364,9 @@ def assign_slicers(user_id: int):
 
     if form.validate_on_submit():
         selected_ids = set(form.slicer_ids.data or [])
-        user.slicers = [s for s in active_slicers if s.id in selected_ids]
+        # Paused slicers aren't on the form, so saving mustn't drop their assignments.
+        paused = [s for s in user.slicers if s.uplynk_account.is_paused]
+        user.slicers = [s for s in active_slicers if s.id in selected_ids] + paused
         db.session.commit()
         log_admin_event(
             "user",
@@ -436,6 +469,7 @@ def list_slicers():
     slicers = (
         db.session.query(Slicer)
         .join(UplynkAccount)
+        .filter(UplynkAccount.is_paused.is_(False))
         .order_by(UplynkAccount.label, Slicer.slicer_id)
         .all()
     )
@@ -447,9 +481,14 @@ def list_slicers():
 def new_slicer():
     from app.admin.forms import SlicerForm
 
-    accounts = db.session.query(UplynkAccount).order_by(UplynkAccount.label).all()
+    accounts = (
+        db.session.query(UplynkAccount)
+        .filter(UplynkAccount.is_paused.is_(False))
+        .order_by(UplynkAccount.label)
+        .all()
+    )
     if not accounts:
-        flash("Add an Uplynk account first before creating slicers.", "error")
+        flash("Add or resume an Uplynk account before creating slicers.", "error")
         return redirect(url_for("admin.list_accounts"))
 
     form = SlicerForm()
@@ -499,7 +538,13 @@ def edit_slicer(slicer_id_pk: int):
     if slicer is None:
         abort(404)
 
-    accounts = db.session.query(UplynkAccount).order_by(UplynkAccount.label).all()
+    # The slicer's own account stays a valid choice even if it's paused.
+    accounts = (
+        db.session.query(UplynkAccount)
+        .filter(UplynkAccount.is_paused.is_(False) | (UplynkAccount.id == slicer.uplynk_account_id))
+        .order_by(UplynkAccount.label)
+        .all()
+    )
     form = SlicerForm(obj=slicer)
     form.uplynk_account_id.choices = [(a.id, a.label) for a in accounts]
 
@@ -591,7 +636,7 @@ def slicer_updates():
 @bp.route("/slicer-updates/sync-all", methods=["POST"])
 @admin_required
 def slicer_updates_sync_all():
-    """Sync every account with a scoped key, one at a time.
+    """Sync every unpaused account with a scoped key, one at a time.
 
     The fallback without JavaScript: the progress panel syncs accounts one
     request at a time instead. Gunicorn kills a request after 30s and one sync
@@ -601,7 +646,7 @@ def slicer_updates_sync_all():
     accounts = [
         a
         for a in db.session.scalars(select(UplynkAccount).order_by(UplynkAccount.label))
-        if a.has_scoped_key
+        if a.has_scoped_key and not a.is_paused
     ]
     deadline = time.monotonic() + SYNC_ALL_BUDGET_SECONDS
     not_reached = []
