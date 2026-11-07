@@ -1682,3 +1682,12 @@ def test_retry_stays_the_primary_button_when_it_is_offered(app, client, uplynk):
     body = _apply(client, [pk], encoding_profile_id=GUID_B).get_data(as_text=True)
     assert "Retry 1 not updated" in body
     assert re.search(r'<a class="btn-ghost" href="[^"]*">Start a new update</a>', body)
+
+
+@pytest.mark.parametrize("url", ["/", "/admin/slicer-updates"])
+def test_slicer_pages_load_shift_select(app, client, uplynk, url):
+    _slicer(_account(), "a")
+    _login(client)
+    body = client.get(url).get_data(as_text=True)
+    assert "js/shift_select.js" in body
+    assert "window.initShiftSelect();" in body

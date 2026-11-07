@@ -114,10 +114,12 @@
 
 {% block extra_head %}
 <script src="{{ url_for('static', filename='js/workspace_sections.js') }}"></script>
+<script src="{{ url_for('static', filename='js/shift_select.js') }}"></script>
 <script src="{{ url_for('static', filename='js/sync_progress.js') }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     window.initWorkspaceSections();
+    window.initShiftSelect();
     const bar = document.getElementById('batch-bar');
     if (!bar) return;
 
