@@ -205,6 +205,7 @@
 
 {% block extra_head %}
     <script src="{{ url_for('static', filename='js/workspace_sections.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/shift_select.js') }}"></script>
     {% if current_user.is_admin %}
         <script src="{{ url_for('static', filename='js/sync_progress.js') }}"></script>
     {% endif %}
@@ -318,6 +319,7 @@
                 }
 
                 window.initWorkspaceSections();
+                window.initShiftSelect();
                 window.initSyncProgress?.();
 
                 clearBtn.addEventListener('click', function () {

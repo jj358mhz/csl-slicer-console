@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-11-07
+
+### ✨ Added
+- **Shift-click to select a range of slicers** on the Dashboard and Slicer Updates.
+  Every slicer between the last box you clicked and this one takes the same state.
+  A range stays inside one account and skips rows hidden by the filter.
+
 ## [1.22.0] - 2026-11-06
 
 ### ✨ Added
