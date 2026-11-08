@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-11-07
+
+### ✨ Added
+- **Single sign-on through Authentik.** Behind the Authentik forward-auth gate in
+  Caddy, the console signs in the account matching your Authentik email, so there's
+  no second login. It only trusts that email when the request also carries
+  `AUTHENTIK_GATE_SECRET`, which only Caddy sends. Signing out of the console signs
+  out of Authentik too. An Authentik user with no console account gets the normal
+  login page with a note, and password login still works. Without the secret set,
+  nothing changes.
+
 ## [1.23.0] - 2026-11-07
 
 ### ✨ Added

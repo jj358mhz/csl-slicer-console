@@ -198,6 +198,7 @@ committed to Git.
 | `PLAYER_BASE_URL`          | player-test-harness URL for "▶ Player" links (optional)    |
 | `PLAYER_API_TOKEN`         | Token the player sends to read slicer settings (optional)  |
 | `PLAYER_API_URL`           | Player URL for channel health badges (default `PLAYER_BASE_URL`) |
+| `AUTHENTIK_GATE_SECRET`    | Secret Caddy sends with Authentik's user, for single sign-on (optional) |
 
 Bootstrap only runs when the `users` table is empty; subsequent env-var
 changes to `BOOTSTRAP_ADMIN_*` are ignored. Reset an admin password
@@ -222,11 +223,19 @@ In `homelab-utility/caddy/Caddyfile`:
 ```caddy
 csl.telcomjj.com {
 	import cf_tls
+	import authentik_gate
 	reverse_proxy csl-slicer-console:5000
 	import security_headers
 	log { output file /data/logs/csl.log { roll_size 10mb roll_keep 5 } format json }
 }
 ```
+
+`authentik_gate` puts Authentik's forward auth in front of the console (see
+`homelab-utility`'s Caddy and Authentik READMEs). With `AUTHENTIK_GATE_SECRET`
+set to the same value in both places, Caddy also sends that secret and the
+signed-in user's email, and the console signs in the account with that email.
+Signing out of the console then signs out of Authentik too. An Authentik user
+with no console account gets the normal login page, with a note.
 
 ## ⚙️ CI/CD
 

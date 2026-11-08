@@ -9,6 +9,7 @@ from flask_login import current_user, login_required, login_user, logout_user
 
 from app.auth.forms import LoginForm
 from app.auth.passwords import verify_password
+from app.auth.sso import SIGN_OUT_PATH, gate_email
 from app.models import User, db
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -31,12 +32,15 @@ def login():
             return redirect(url_for("main.index"))
         flash("Invalid email or password.", "error")
 
-    return render_template("auth/login.html", form=form)
+    # Reaching here through the gate means Authentik's user has no console account.
+    return render_template("auth/login.html", form=form, gate_email=gate_email())
 
 
 @bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
     logout_user()
+    if gate_email() is not None:
+        return redirect(SIGN_OUT_PATH)
     flash("You've been signed out.", "info")
     return redirect(url_for("auth.login"))

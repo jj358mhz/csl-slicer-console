@@ -47,4 +47,8 @@ class Config:
             os.getenv("PLAYER_API_URL", "").strip() or self.PLAYER_BASE_URL
         ).rstrip("/")
 
+        # Shared with Caddy, which sends it in X-Authentik-Gate on requests Authentik
+        # let through; only then is X-Authentik-Email trusted (empty = no single sign-on).
+        self.AUTHENTIK_GATE_SECRET = os.getenv("AUTHENTIK_GATE_SECRET", "").strip()
+
         self.WTF_CSRF_ENABLED = os.getenv("WTF_CSRF_ENABLED", "true").lower() == "true"
