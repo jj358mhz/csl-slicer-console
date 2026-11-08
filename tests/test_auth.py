@@ -45,3 +45,9 @@ def test_login_with_bad_password(client):
         follow_redirects=True,
     )
     assert b"Invalid email or password" in response.data
+
+
+def test_manifest_is_fetched_with_credentials(client):
+    # Behind the Authentik gate, a manifest fetched without cookies is turned away.
+    body = client.get("/auth/login").get_data(as_text=True)
+    assert 'site.webmanifest" crossorigin="use-credentials"' in body

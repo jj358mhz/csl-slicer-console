@@ -17,7 +17,9 @@
           href="{{ url_for('static', filename='favicons/favicon-16x16.png') }}">
     <link rel="apple-touch-icon" sizes="180x180"
           href="{{ url_for('static', filename='favicons/apple-touch-icon.png') }}">
-    <link rel="manifest" href="{{ url_for('static', filename='favicons/site.webmanifest') }}">
+    {#- Browsers fetch the manifest without cookies unless told otherwise, and the
+        Authentik gate in front of the app turns a cookieless request away. -#}
+    <link rel="manifest" href="{{ url_for('static', filename='favicons/site.webmanifest') }}" crossorigin="use-credentials">
     <meta name="theme-color" content="#ec1e79">
 </head>
 <body>
