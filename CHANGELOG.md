@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.24.2] - 2026-11-09
+
+### 📚 Docs
+- **Linking a local player.** *Running your own instance* now shows the `.env`
+  lines that connect a self-hosted console to a player-test-harness on the same
+  machine, and notes that every `docker compose` command needs both `-f` flags.
+  `.env.example` gets the matching local `PLAYER_API_URL`.
+  ([#87](https://github.com/jj358mhz/csl-slicer-console/issues/87))
+
+### 💄 Changed
+- **`docker-compose.local.yml` maps `host.docker.internal` to the host**, so a
+  local console can reach a local player on Docker Engine for Linux as well as
+  Docker Desktop.
+
 ## [1.24.1] - 2026-11-07
 
 ### 🐛 Fixed
