@@ -165,6 +165,37 @@ environment variables are the same ones documented in **Production
 deployment** below; reset an admin password with the same `docker exec`
 one-liner shown there.
 
+Every `docker compose` command for this instance needs both `-f` flags,
+including `stop`, `down` and `logs`. Without them, Compose uses the
+production `docker-compose.yml` on its own, which publishes no port (so
+`curl` says *Couldn't connect to server*) and needs the external `auth-net`
+network.
+
+### Linking a local player
+
+To get "▶ Player" links and channel health badges from a
+[player-test-harness](https://github.com/jj358mhz/player-test-harness)
+running from its own local overlay on the same machine, add to `.env`:
+
+```bash
+PLAYER_BASE_URL=http://localhost:5051              # links your browser follows
+PLAYER_API_URL=http://host.docker.internal:5051    # where this container reaches the player
+PLAYER_API_TOKEN=<token>                           # the player's CSL_API_TOKEN, same value
+```
+
+Inside the container, `localhost` is the container itself, and the two
+overlays put each app on its own Docker network, so the console reaches the
+player through the port it publishes on the host (5051, or the player's
+`WEB_PORT`). The overlay maps `host.docker.internal` to the host on Linux
+too. Generate the token once and set it on both sides: here as
+`PLAYER_API_TOKEN`, in the player's `.env` as `CSL_API_TOKEN`, with
+`CSL_API_URL=http://host.docker.internal:5050`. Then restart each app from
+its own folder so it reads the new `.env`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+```
+
 Want your own domain and TLS? Put the container behind your own reverse
 proxy (Caddy, nginx, Traefik, ...) — the overlay just gets you a working
 instance reachable at `http://localhost:5050`; exposing it beyond your LAN

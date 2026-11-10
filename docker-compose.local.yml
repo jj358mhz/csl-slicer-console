@@ -8,6 +8,10 @@
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 #   curl http://localhost:5050/health
+#
+# Every compose command for this instance needs both -f flags (stop, down,
+# logs too); without them Compose uses the production file, which publishes
+# no port and needs the external auth-net network.
 # -----------------------------------------------------------------------------
 
 services:
@@ -15,6 +19,10 @@ services:
     image: csl-slicer-console:local
     ports:
       - "${WEB_PORT:-5050}:5000"
+    # Lets PLAYER_API_URL reach a local player through the host's published
+    # port. Docker Desktop has this name already; Docker Engine on Linux doesn't.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 networks:
   web:
